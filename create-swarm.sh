@@ -57,6 +57,7 @@ chmod a+x cloud-init/*.sh
 
 
 ## Create the new droplet
+printf "\n Creating droplet \"${DROPLET_NAME}\" as a new swarm manager - this could take a minute...\n\n"
 doctl compute droplet create ${DROPLET_NAME} \
     --wait \
     --image ${DO_DROPLET_IMAGE} \
