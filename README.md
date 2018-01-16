@@ -33,3 +33,11 @@ To destroy the entire swarm and associated DigitalOcean droplets:
 
     $ swarmbuilder.sh destroy exampleSwarmName $DO_API_KEY
 
+## Known Issues
+
+#### You receive the error: `Error: fork/exec /usr/bin/ssh: permission denied`
+This error is caused by a faulty installation of the `doctl` command-line tool.
+The issue is known to exist in doctl v1.7.0 when installed using the `snap`
+package manager (`sudo snap install doctl`).
+The error is resolved by installing `doctl` directly from a GitHub release.
+  
