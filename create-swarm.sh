@@ -64,7 +64,7 @@ doctl compute droplet create ${DROPLET_NAME} \
     --region ${DO_DROPLET_REGION} \
     --size ${DO_DROPLET_SIZE} \
     --ssh-keys ${DO_DROPLET_SSH_KEYS} \
-    --tag-names "$SWARM_NAME,swarm,manager" \
+    --tag-names "swarm,$SWARM_NAME,$SWARM_NAME-manager" \
     --access-token ${DO_ACCESS_TOKEN} \
     --user-data-file ./cloud-init/bootstrap.sh \
     ${DO_DROPLET_FLAGS}
