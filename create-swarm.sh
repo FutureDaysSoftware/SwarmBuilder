@@ -58,6 +58,7 @@ chmod a+x cloud-init/*.sh
 
 ## Create the new droplet
 doctl compute droplet create ${DROPLET_NAME} \
+    --wait \
     --image ${DO_DROPLET_IMAGE} \
     --region ${DO_DROPLET_REGION} \
     --size ${DO_DROPLET_SIZE} \
