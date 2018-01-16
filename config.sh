@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Digital Ocean Access Token / API key (if omitted here, it can be provided on the command line)
-export DO_ACCESS_TOKEN="d37a39e39630c49bf41efb4c31ce478f70f330a2df8114502fe37796bbaca5bd"
+export DO_ACCESS_TOKEN=""
 
 ## ----------------------------------------------
 ## Digital Ocean droplet configuration
