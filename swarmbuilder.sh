@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
 ## Import config variables
+if [ ! -f "./config.sh" ]; then
+    printf "Config file not found - creating \'config.sh\' from the template.
+    You should customize the contents of \'config.sh\' before using this script.\n"
+    $(cp ./config.example.sh ./config.sh && chmod a+x ./config.sh) || printf "\nUnable to create config file.\n" 1>&2 && exit 1
+fi
 source ./config.sh
 
 USAGE="\nCreate & manage a Docker swarm on DigitalOcean droplets
