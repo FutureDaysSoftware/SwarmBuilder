@@ -3,8 +3,10 @@
 ## Import config variables
 source ./config.sh
 
-USAGE="Usage:
-$(basename "$0") exampleSwarmName [DO_ACCESS_TOKEN] -- Create a new swarm with a single manager node on DigitalOcean.
+USAGE="Create a new swarm with a single manager node on DigitalOcean.
+
+Usage:
+$(basename "$0") <exampleSwarmName> [DO_ACCESS_TOKEN]
 
 where:
     exampleSwarmName    The name of the swarm. All droplets will use this name with an incrementing number appended.
