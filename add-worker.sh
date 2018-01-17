@@ -57,45 +57,36 @@ elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     exit 1
 fi
 
-function getNodeName() {
-    printf $1 | cut -d$'\t' -f 1
-}
-
-function getNodeID() {
-    printf $1 | cut -d$'\t' -f 2
-}
-
-function getNodeIP() {
-    printf $1 | cut -d$'\t' -f 3
-}
-
 ## Grab command-line parameters
 ## Note: options & flags have been 'shift'ed off the stack.
 SWARM_NAME="$1"
 
 
 ## Find a manager node for the requested swarm
-MANAGER_NODE=$(doctl compute droplet list \
+MANAGER_NODE_STRING=$(doctl compute droplet list \
     --tag-name ${SWARM_NAME}-manager \
     --format Name,ID,PublicIPv4 \
     --no-header \
     --access-token ${DO_ACCESS_TOKEN} | head -n1)
 
 ## Get the swarm join-token from the manager node
-if [ -z "$MANAGER_NODE" ]; then
+if [ -z "$MANAGER_NODE_STRING" ]; then
     printf "No manager node found for the \"${SWARM_NAME}\" swarm. Does the swarm exist yet?\n\n" 1>&2
     exit 1
 else
-    MANAGER_ID=$(getNodeID ${MANAGER_NODE})
-    MANAGER_NAME=$(getNodeName ${MANAGER_NODE})
-    MANAGER_IP=$(getNodeIP ${MANAGER_NODE})
 
-	JOIN_TOKEN=$(doctl compute ssh ${MANAGER_ID} --ssh-command "docker swarm join-token -q worker")
+    MANAGER_NODE_ARRAY=(${MANAGER_NODE_STRING})
+    MANAGER_NAME=${MANAGER_NODE_ARRAY[0]}
+    MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
+    MANAGER_IP=${MANAGER_NODE_ARRAY[2]}
+
+	JOIN_TOKEN=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
 	if [ -z "$JOIN_TOKEN" ]; then
 		printf "Couldn't get swarm token from manager node \"${MANAGER_NAME}\"\n\n" 1>&2
 		exit 1
 	fi
 fi
+
 
 ## Find the next sequential node number to start naming the new worker droplets
 ## Method:
