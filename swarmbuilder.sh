@@ -15,7 +15,8 @@ $(basename "$0") [command] [flags]
 
 Available commands:
     create          Create a new swarm on fresh droplets.
-    scale           Change the number of nodes in the swarm (and the number of droplets).
+    scale-swarm     Change the number of nodes in the swarm (and the number of droplets).
+    scale-stack     Change the number of replicas of a service stack running in the swarm.
     destroy         Destroy the entire swarm and delete all its droplets.
 
 Flags:
@@ -28,7 +29,7 @@ Usage:
 $(basename "$0") create <swarmName> [flags]
 
 Where:
-    swarmName       The name of the swarm to be created.
+    <swarmName>     The name of the swarm to be created.
                      All droplets and swarm nodes will use this as their base name.
 
 Flags:
@@ -37,17 +38,31 @@ Flags:
     -t, --token     Your DigitalOcean API key (optional).
                      If omitted here, it must be provided in \'config.sh\'\n\n"
 
-SCALE_USAGE="\nChange the number of worker nodes in the swarm.
+SCALE_SWARM_USAGE="\nChange the number of worker nodes in the swarm.
 
 Usage:
-$(basename "$0") scale <swarmName> --workers [flags]
+$(basename "$0") scale-swarm <swarmName> --workers <#> [flags]
 
 Where:
-    swarmName       The name of the swarm to be created.
+    <swarmName>     The name of the swarm to be scaled.
                      All droplets and swarm nodes will use this as their base name.
+    --workers       The integer number of worker nodes that should exist.
 
 Flags:
-    --workers       The integer number of worker nodes that should exist.
+    -t, --token     Your DigitalOcean API key (optional).
+                     If omitted here, it must be provided in \'config.sh\'\n\n"
+
+SCALE_STACK_USAGE="\nChange the number of replicas of the \'-web\' service in a stack.
+
+Usage:
+$(basename "$0") scale-stack <swarmName> --stack <stackName> --replicas <#> [flags]
+
+Where:
+    <swarmName>     The name of the swarm that is hosting the stack to be scaled.
+    --stack         The name of the service stack to be scaled. Only the service named \'stackName-web\' will be scaled.
+    --replicas      The integer number of replicas of the web service that should exist on the swarm.
+
+Flags:
     -t, --token     Your DigitalOcean API key (optional).
                      If omitted here, it must be provided in \'config.sh\'\n\n"
 
@@ -57,7 +72,7 @@ Usage:
 $(basename "$0") destroy <swarmName> [flags]
 
 Where:
-    swarmName       The name of the swarm to be destroyed.
+    <swarmName>     The name of the swarm to be destroyed.
                      All droplets in this swarm will be deleted.
 
 Flags:
@@ -167,7 +182,7 @@ case "$SUBCOMMAND" in
         fi
         ;;
 
-    scale)
+    scale-swarm)
         ## Set default options
         ## This command has no defaults
 
@@ -200,7 +215,7 @@ case "$SUBCOMMAND" in
         done
 
         if [[ $# -eq 0 ]] || [[ -z "$WORKERS_DESIRED" ]]; then
-            printf "$SCALE_USAGE"
+            printf "$SCALE_SWARM_USAGE"
             exit 0
         fi
 
@@ -233,6 +248,54 @@ case "$SUBCOMMAND" in
         fi
         ;;
 
+    scale-stack)
+        ## Set default options
+        ## This command has no defaults
+
+        ## Process flags and options
+        SHORTOPTS="t:"
+        LONGOPTS="token:,workers:"
+        ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
+        eval set -- ${ARGS}
+
+        while true; do
+            case ${1} in
+                --workers)
+                    shift
+                    WORKERS_DESIRED="$1"
+                    ;;
+                -t | --token )
+                    shift
+                    DO_ACCESS_TOKEN="$1"
+                    ;;
+                -- )
+                    shift
+                    break
+                    ;;
+                * )
+                    shift
+                    break
+                    ;;
+            esac
+            shift;
+        done
+
+        if [[ $# -eq 0 ]] || [[ -z "$WORKERS_DESIRED" ]]; then
+            printf "$SCALE_SWARM_USAGE"
+            exit 0
+        fi
+
+        ## Read arguments
+        SWARM_NAME="$1"; shift
+
+        ## Count the current number of worker nodes in the swarm
+        WORKER_NODES_STRING=$(doctl compute droplet list \
+            --tag-name ${SWARM_NAME}-worker \
+            --format Name \
+            --no-header \
+            --access-token ${DO_ACCESS_TOKEN} )
+
+        ;;
     destroy)
         ## Set default options
         ## This command has no defaults
