@@ -81,3 +81,10 @@ fi
 ## Delete the droplets
 doctl compute droplet delete ${DROPLET_IDS_IN_SWARM} --access-token ${DO_ACCESS_TOKEN}${DO_COMMAND_FLAGS}
 
+if [[ $? -ne 0 ]]; then
+    printf "\nError while destroying droplets. Exiting.\n\n" 1>&2
+    exit 1
+fi
+
+printf "\nAll droplets in the ${SWARM_NAME} swarm have been deleted!\n\n"
+exit 0
