@@ -104,7 +104,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
     printf "Draining tasks from node \"${NODE_NAME}\"..."
-	doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
+	yes | doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
 	printf "done\n"
 done
 printf "\n"
@@ -118,7 +118,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
 	printf "Removing ${NODE_NAME} from the swarm..."
-	doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
+	yes | doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
 	printf "done\n"
 done
 printf "\n"
