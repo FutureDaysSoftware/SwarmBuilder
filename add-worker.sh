@@ -12,14 +12,16 @@ where:
     exampleSwarmName    The name of the existing swarm.
     -t, --token         Your DigitalOcean API key (optional).
                          If omitted here, it must be provided in \'config.sh\'
-    -n, --add           The number of worker nodes to create (Default 1).\n\n"
+    -n, --add           The number of worker nodes to create (Default 1).
+        --wait          Wait for the droplets to finish booting before returning.\n\n"
 
 ## Set default options
 WORKERS_TO_ADD=1
+FLAGS=""
 
 ## Process flags and options
 SHORTOPTS="n:t:"
-LONGOPTS="add:,token:"
+LONGOPTS="add:,token:,wait"
 ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
 eval set -- ${ARGS}
 
@@ -28,10 +30,16 @@ while true; do
 		-n | --add)
             shift
 		    WORKERS_TO_ADD="$1"
+		    shift
+		    ;;
+		--wait)
+		    shift
+		    FLAGS="--wait"
 		    ;;
 		-t | --token)
 		    shift
 		    DO_ACCESS_TOKEN="$1"
+		    shift
 		    ;;
 		-- )
 		    shift
@@ -42,7 +50,6 @@ while true; do
 		    break
 		    ;;
 	esac
-	shift;
 done
 
 if [[ $# -eq 0 ]]; then
@@ -77,7 +84,7 @@ else
     MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
     MANAGER_IP=${MANAGER_NODE_ARRAY[2]}
 
-	JOIN_TOKEN=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
+	JOIN_TOKEN=$(yes | doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
 	if [ -z "$JOIN_TOKEN" ]; then
 		printf "Couldn't get swarm token from manager node \"${MANAGER_NAME}\"\n\n" 1>&2
 		exit 1
@@ -135,7 +142,8 @@ doctl compute droplet create ${DROPLET_NAMES} \
 --tag-names "swarm,$SWARM_NAME,$SWARM_NAME-worker" \
 --access-token ${DO_ACCESS_TOKEN} \
 --user-data-file ./cloud-init/bootstrap.sh \
-${DO_DROPLET_FLAGS}
+${DO_DROPLET_FLAGS} \
+${FLAGS}
 
 if [[ $? -ne 0 ]]; then
     printf "\nError while creating worker nodes. Exiting.\n\n" 1>&2
