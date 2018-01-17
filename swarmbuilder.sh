@@ -32,6 +32,7 @@ Where:
                      All droplets and swarm nodes will use this as their base name.
 
 Flags:
+    --managers      The integer number of manager nodes to create.  Default 1.
     --workers       The integer number of worker nodes to create (Default 0) in addition to the single manager node.
     -t, --token     Your DigitalOcean API key (optional).
                      If omitted here, it must be provided in \'config.sh\'\n\n"
@@ -70,6 +71,8 @@ if [[ $# -eq 0 ]]; then
 
 fi
 
+
+
 ## Determine which subcommand was requested
 ## Note: options & flags have been 'shift'ed off the stack.
 SUBCOMMAND="$1"; shift  # Remove the subcommand from the argument list
@@ -78,8 +81,9 @@ SUBCOMMAND="$1"; shift  # Remove the subcommand from the argument list
 case "$SUBCOMMAND" in
     create)
         ## Set default options
-        MANAGERS_TO_ADD=1
+        MANAGERS_TO_ADD=0
         WORKERS_TO_ADD=0
+        FLAGS=""
 
         ## Process flags and options
         SHORTOPTS="t:"
@@ -91,7 +95,10 @@ case "$SUBCOMMAND" in
             case ${1} in
                 --managers)
                     shift
-                    MANAGERS_TO_ADD="$1"
+                    MANAGERS_TO_ADD=$(($1 - 1))
+                    if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
+                        FLAGS=" --wait"
+                    fi
                     ;;
                 --workers)
                     shift
@@ -121,13 +128,42 @@ case "$SUBCOMMAND" in
         ## Read arguments
         SWARM_NAME="$1"; shift
 
+        function WAIT_FOR_MANAGER () {
+            MANAGER_NAME=${1}
+            RESPONSE="This node is not a swarm manager"
+            TIMER=0
+            while [[ ( ${RESPONSE} == *"This node is not a swarm manager"*  ||  ${RESPONSE} == *"Connection refused"* ) ]] && [[ ${TIMER} < 120 ]]; do
+                RESPONSE=$(yes | doctl compute ssh ${MANAGER_NAME} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node ls")
+                printf "Docker hasn\'t initialized the swarm manager yet. Waiting 10 seconds...\n"
+                sleep 10
+                let TIMER=TIMER+10
+            done
+
+            if [[ ${RESPONSE} == *"This node is not a swarm manager"* ]]; then
+                printf "Manager node \"${MANAGER_NAME}\" still hasn\'t initialized the swarm.  Try in a few minutes.\n"
+                exit 1
+            fi
+
+            printf "Manager node ${MANAGER_NAME} is ready!\n"
+        }
+
         ## Create the swarm
         ./create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 1
-        printf "Waiting for swarm manager to come online..."
-        sleep 30
-        printf "done\n"
+        printf "\nWaiting for swarm manager to initialize the swarm..."
+        WAIT_FOR_MANAGER "${SWARM_NAME}-01"
+        printf "\n"
         if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
-            ./add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --token "$DO_ACCESS_TOKEN" || exit 1
+            spawn ./add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
+            expect {
+                "(yes/no"
+
+        fi
+
+        if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
+            printf "\nWaiting for workers to join the swarm..."
+            sleep 30
+            printf "done\n"
+            ./add-manager.sh "$SWARM_NAME" --add "$MANAGERS_TO_ADD" --token "$DO_ACCESS_TOKEN" || exit 1
         fi
         ;;
 
@@ -217,6 +253,7 @@ case "$SUBCOMMAND" in
                 -t | --token )
                     shift
                     DO_ACCESS_TOKEN="$1"
+                    shift
                     ;;
                 -- )
                     shift
@@ -227,7 +264,6 @@ case "$SUBCOMMAND" in
                     break
                     ;;
             esac
-            shift;
         done
 
         if [[ $# -eq 0 ]]; then
