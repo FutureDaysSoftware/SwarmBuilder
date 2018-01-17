@@ -6,22 +6,40 @@ source ./config.sh
 USAGE="Create a new swarm with a single manager node on DigitalOcean.
 
 Usage:
-$(basename "$0") <exampleSwarmName> [DO_ACCESS_TOKEN]
+$(basename "$0") <exampleSwarmName> [--token]
 
 where:
     exampleSwarmName    The name of the swarm. All droplets will use this name with an incrementing number appended.
-    DO_ACCESS_TOKEN     Your DigitalOcean API key (optional). If omitted here, it must be provided in \'config.sh\'\n\n"
+    -t, --token         Your DigitalOcean API key (optional). If omitted here, it must be provided in \'config.sh\'\n\n"
 
-## Use the appropriate DO_ACCESS_TOKEN.  The order of precedence is:
-##   1. Use the token given on the command line, if present.
-##   2. Use the token provided in `config.sh`, if present.
-##   3. Throw an error.
+## Process flags and options
+SHORTOPTS="t:"
+LONGOPTS="token:"
+ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
+eval set -- ${ARGS}
+
+while true; do
+	case ${1} in
+		-t | --token)
+            shift
+		    DO_ACCESS_TOKEN="$1"
+		    ;;
+		-- )
+		    shift
+		    break
+		    ;;
+		* )
+		    shift
+		    break
+		    ;;
+	esac
+	shift;
+done
+
 
 if [[ $# -eq 0 ]]; then
     printf "$USAGE"
     exit 0
-elif [[ $# -eq 2 ]]; then
-    DO_ACCESS_TOKEN="$2"
 elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     printf "A DigitalOcean access token was not provided.
     You must provide one on the command line when using this command, or set one in the \'config.sh\' file.\n\n"

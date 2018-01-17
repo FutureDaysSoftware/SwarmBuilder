@@ -6,28 +6,32 @@ source ./config.sh
 USAGE="\nRemove worker nodes from an existing swarm.
 
 Usage:
-$(basename "$0") <exampleSwarmName> [DO_ACCESS_TOKEN] [-n 1]
+$(basename "$0") <exampleSwarmName> [--token] [--remove 1]
 
 where:
     exampleSwarmName    The name of the existing swarm.
-    DO_ACCESS_TOKEN     Your DigitalOcean API key (optional).
+    -t, --token         Your DigitalOcean API key (optional).
                          If omitted here, it must be provided in \'config.sh\'
-    -n                  The number of worker nodes to remove (Default 1).\n\n"
+    -n, --remove        The number of worker nodes to remove (Default 1).\n\n"
 
 ## Set default options
 QTY_WORKERS_TO_REMOVE=1
 
 ## Process flags and options
-SHORTOPTS="n:"
-LONGOPTS="number:"
+SHORTOPTS="t:n:"
+LONGOPTS="token:,remove:"
 ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
 eval set -- ${ARGS}
 
 while true; do
 	case ${1} in
-		-n | --number )
+		-n | --remove)
             shift
 		    QTY_WORKERS_TO_REMOVE="$1"
+		    ;;
+		-t | --token)
+		    shift
+		    DO_ACCESS_TOKEN="$1"
 		    ;;
 		-- )
 		    shift
@@ -41,16 +45,9 @@ while true; do
 	shift;
 done
 
-## Use the appropriate DO_ACCESS_TOKEN.  The order of precedence is:
-##   1. Use the token given on the command line, if present.
-##   2. Use the token provided in `config.sh`, if present.
-##   3. Throw an error.
-
 if [[ $# -eq 0 ]]; then
     printf "$USAGE"
     exit 0
-elif [[ $# -eq 2 ]]; then
-    DO_ACCESS_TOKEN="$2"
 elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     printf "A DigitalOcean access token was not provided.
     You must provide one on the command line when using this command, or set one in the \'config.sh\' file.\n\n"

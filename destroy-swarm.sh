@@ -6,11 +6,11 @@ source ./config.sh
 USAGE="\nDestroy ALL nodes in the specified Swarm
 
 Usage:
-$(basename "$0") <exampleSwarmName> [DO_ACCESS_TOKEN] [-yf]
+$(basename "$0") <exampleSwarmName> [--token] [--force]
 
 where:
     exampleSwarmName    The name of the swarm to be destroyed.
-    DO_ACCESS_TOKEN     Your DigitalOcean API key (optional).
+    -t, --token         Your DigitalOcean API key (optional).
                          If omitted here, it must be provided in \'config.sh\'
     -f, --force         Bypass the interactive confirmation.\n\n"
 
@@ -18,8 +18,8 @@ where:
 BYPASS_CONFIRMATION=false
 
 ## Process flags and options
-SHORTOPTS="f"
-LONGOPTS="force"
+SHORTOPTS="ft:"
+LONGOPTS="force,token:"
 ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
 eval set -- ${ARGS}
 
@@ -28,6 +28,11 @@ while true; do
 		-f | --force)
             shift
             BYPASS_CONFIRMATION=true
+		    ;;
+		-t | --token)
+		    shift
+		    DO_ACCESS_TOKEN="$1"
+		    shift
 		    ;;
 		-- )
 		    shift
@@ -40,16 +45,9 @@ while true; do
 	esac
 done
 
-## Use the appropriate DO_ACCESS_TOKEN.  The order of precedence is:
-##   1. Use the token given on the command line, if present.
-##   2. Use the token provided in `config.sh`, if present.
-##   3. Throw an error.
-
 if [[ $# -eq 0 ]]; then
     printf "$USAGE"
     exit 0
-elif [[ $# -eq 2 ]]; then
-    DO_ACCESS_TOKEN="$2"
 elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     printf "A DigitalOcean access token was not provided.
     You must provide one on the command line when using this command, or set one in the \'config.sh\' file.\n\n"
