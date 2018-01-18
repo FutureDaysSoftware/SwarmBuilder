@@ -87,7 +87,6 @@ if [[ $# -eq 0 ]]; then
 fi
 
 
-
 ## Determine which subcommand was requested
 ## Note: options & flags have been 'shift'ed off the stack.
 SUBCOMMAND="$1"; shift  # Remove the subcommand from the argument list
@@ -144,6 +143,12 @@ case "$SUBCOMMAND" in
         SWARM_NAME="$1"; shift
 
         function WAIT_FOR_MANAGER () {
+            ## Poll a manager node until it the docker swarm is initialized.  Only keep trying if expected failures occur:
+            ##   If the droplet isn't active yet, it will reject the SSH connection attempt - we'll try again in 10 seconds.
+            ##   If the droplet is active, but 'docker swarm init' operation hasn't completed, it will report
+            ##   that "This node is not a swarm manager".  We'll try again.
+            ## Other errors will break the polling loop.
+
             MANAGER_NAME=${1}
             RESPONSE="This node is not a swarm manager"
             TIMER=0
@@ -168,10 +173,7 @@ case "$SUBCOMMAND" in
         WAIT_FOR_MANAGER "${SWARM_NAME}-01"
         printf "\n"
         if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
-            spawn ./add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
-            expect {
-                "(yes/no"
-
+            ./add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
         fi
 
         if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
@@ -242,9 +244,15 @@ case "$SUBCOMMAND" in
             printf "Removing ${WORKERS_TO_REMOVE} worker(s) from the ${SWARM_NAME} swarm\n"
             ./remove-worker.sh "$SWARM_NAME" --remove "$WORKERS_TO_REMOVE" --token "$DO_ACCESS_TOKEN" || exit 1
             exit 0
-        else
+        elif [[ ${WORKERS_DESIRED} -eq ${WORKER_NODES_COUNT} ]]; then
             printf "This swarm already has ${WORKERS_DESIRED} worker nodes.\n"
-            exit 0
+#            exit 0
+#        else
+            printf "Something went wrong. Debugging info:\n"
+            echo "WORKERS_DESIRED: ${WORKERS_DESIRED}"
+            echo "WORKER_NODES_COUNT: ${WORKER_NODES_COUNT}"
+            echo "WORKERS_TO_ADD: ${WORKERS_TO_ADD}"
+            echo "WORKERS_TO_REMOVE: ${WORKERS_TO_REMOVE}"
         fi
         ;;
 
@@ -254,15 +262,19 @@ case "$SUBCOMMAND" in
 
         ## Process flags and options
         SHORTOPTS="t:"
-        LONGOPTS="token:,workers:"
+        LONGOPTS="token:,stack:,replicas:"
         ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
         eval set -- ${ARGS}
 
         while true; do
             case ${1} in
-                --workers)
+                --stack)
                     shift
-                    WORKERS_DESIRED="$1"
+                    STACK_NAME="$1"
+                    ;;
+                --replicas)
+                    shift
+                    REPLICAS_DESIRED_QTY="$1"
                     ;;
                 -t | --token )
                     shift
@@ -280,20 +292,42 @@ case "$SUBCOMMAND" in
             shift;
         done
 
-        if [[ $# -eq 0 ]] || [[ -z "$WORKERS_DESIRED" ]]; then
-            printf "$SCALE_SWARM_USAGE"
+        ## Enforce required arguments
+        if [[ $# -eq 0 ]] || [[ -z "$STACK_NAME" ]] || [[ -z "REPLICAS_DESIRED_QTY" ]]; then
+            printf "$SCALE_STACK_USAGE"
             exit 0
         fi
 
         ## Read arguments
         SWARM_NAME="$1"; shift
+        SERVICE_NAME="${STACK_NAME}-web"  # Assume that the service to be scaled is named 'web' within the requested stack
 
-        ## Count the current number of worker nodes in the swarm
-        WORKER_NODES_STRING=$(doctl compute droplet list \
-            --tag-name ${SWARM_NAME}-worker \
+        ## Determine whether we need to add new worker nodes
+
+        ## Count the current number of nodes in the swarm (workers AND managers, since both can accept tasks)
+        ALL_NODES_STRING=$(doctl compute droplet list \
+            --tag-name ${SWARM_NAME} \
             --format Name \
             --no-header \
             --access-token ${DO_ACCESS_TOKEN} )
+
+        readarray -t ALL_NODES <<< "$ALL_NODES_STRING"
+        ALL_NODES_QTY=${#ALL_NODES[@]}
+        WORKERS_TO_ADD=$((REPLICAS_DESIRED_QTY - ALL_NODES_QTY))
+
+        printf "The ${SWARM_NAME} swarm currently has ${ALL_NODES_QTY} nodes (including managers)... "
+
+        if [[ ${WORKERS_TO_ADD} > 0 ]]; then
+            printf "Adding ${WORKERS_TO_ADD} worker(s) to the ${SWARM_NAME} swarm...\n"
+            ./add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --wait --token "$DO_ACCESS_TOKEN" || exit 1
+        else
+            printf "No new droplets are needed to achieve ${REPLICAS_DESIRED_QTY} replicas.\n"
+        fi
+
+        ## Scale the '-web' service for the specified stack
+        ./scale-service.sh ${SWARM_NAME} --service ${SERVICE_NAME} --replicas ${REPLICAS_DESIRED_QTY} --token ${DO_ACCESS_TOKEN}
+
+        ## TODO: Check for idle nodes and prune unused droplets
 
         ;;
     destroy)
