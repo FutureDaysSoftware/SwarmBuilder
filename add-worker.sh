@@ -71,8 +71,8 @@ SWARM_NAME="$1"
 
 
 ## Get the join-token for the swarm
-JOIN_TOKEN=$(./ssh-to-manager.sh ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
-if [[ -z "$JOIN_TOKEN" ]] || [[ $? -ne 0 ]]; then
+JOIN_TOKEN=$(./ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
+if [[ "$?" != 0 ]] || [[ -z "${JOIN_TOKEN}" ]]; then
     printf "Couldn't get the swarm join-token from manager node. Unable to add workers to the swarm.\n\n" 1>&2
     exit 1
 fi
