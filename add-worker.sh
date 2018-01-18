@@ -13,11 +13,11 @@ where:
     -t, --token         Your DigitalOcean API key (optional).
                          If omitted here, it must be provided in \'config.sh\'
     -n, --add           The number of worker nodes to create (Default 1).
-        --wait          Wait for the droplets to finish booting before returning.\n\n"
+        --wait          Wait for the droplets to finish booting and join the swarm before returning.\n\n"
 
 ## Set default options
 WORKERS_TO_ADD=1
-FLAGS=""
+POLL_NEW_NODES_UNTIL_READY=false
 
 ## Process flags and options
 SHORTOPTS="n:t:"
@@ -34,7 +34,8 @@ while true; do
 		    ;;
 		--wait)
 		    shift
-		    FLAGS="--wait"
+		    DO_DROPLET_FLAGS="$DO_DROPLET_FLAGS --wait"
+		    POLL_NEW_NODES_UNTIL_READY=true
 		    ;;
 		-t | --token)
 		    shift
@@ -59,6 +60,9 @@ elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     printf "A DigitalOcean access token was not provided.
     You must provide one on the command line when using this command, or set one in the \'config.sh\' file.\n\n"
     exit 1
+elif [[ ${WORKERS_TO_ADD} -eq 0 ]]; then
+    printf "No worker nodes will be added\n"
+    exit 0;
 fi
 
 ## Grab command-line parameters
@@ -84,7 +88,7 @@ else
     MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
     MANAGER_IP=${MANAGER_NODE_ARRAY[2]}
 
-	JOIN_TOKEN=$(yes | doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
+	JOIN_TOKEN=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
 	if [ -z "$JOIN_TOKEN" ]; then
 		printf "Couldn't get swarm token from manager node \"${MANAGER_NAME}\"\n\n" 1>&2
 		exit 1
@@ -142,12 +146,25 @@ doctl compute droplet create ${DROPLET_NAMES} \
 --tag-names "swarm,$SWARM_NAME,$SWARM_NAME-worker" \
 --access-token ${DO_ACCESS_TOKEN} \
 --user-data-file ./cloud-init/bootstrap.sh \
-${DO_DROPLET_FLAGS} \
-${FLAGS}
+${DO_DROPLET_FLAGS}
 
 if [[ $? -ne 0 ]]; then
     printf "\nError while creating worker nodes. Exiting.\n\n" 1>&2
     exit 1
+fi
+
+if [[ ${POLL_NEW_NODES_UNTIL_READY} ]]; then
+    printf "Waiting for new workers to join the swarm...\n"
+
+    POLLING_COMMAND="./poll-for-active-node.sh ${SWARM_NAME}"
+
+    ## Send the hostname to the polling script of every new worker node that was just created
+    for NODE in $(echo "$DROPLET_NAMES" | cut -d' ' -f1-); do
+        POLLING_COMMAND="$POLLING_COMMAND --hostname ${NODE}"
+    done
+
+    ## Poll the swarm manager until ALL new workers have joined the swarm
+    eval ${POLLING_COMMAND}
 fi
 
 printf "\nDone!\n\n"
