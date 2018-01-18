@@ -3,17 +3,20 @@
 ## Import config variables
 source ./config.sh
 
-USAGE="\nPoll a swarm manager until the specified node becomes available
+USAGE="\nPoll a swarm manager until the specified node(s) becomes available.  If multiple hostnames are specified,
+the polling will continue until ALL of the nodes are ready.  The polling loop runs on the remote manager node to prevent
+SSH rate-limiting.
 
 Usage:
-$(basename "$0") <exampleSwarmName> [OPTIONS]
+$(basename "$0") <exampleSwarmName> --hostname [HOSTNAME] [--hostname ...] [OPTIONS]
 
 Where:
     exampleSwarmName    The name of the existing swarm.
+    -h, --hostname      Required.  The name of the node to look for. Multiple nodes can be passed in by providing
+                         this flag multiple times, i.e. --hostname myHost-01 --hostname myHost-03
 
 Available Options:
-    -h, --hostname      Required.  The name of the node to look for.
-        --timeout       The number of seconds to continue polling before giving up. Default 60.
+        --timeout       The number of seconds to continue polling before giving up. Default 90.
     -t, --token         Your DigitalOcean API key (optional).
                          If omitted here, it must be provided in \'config.sh\'
 
@@ -22,7 +25,8 @@ Example:
     $(basename "$0") mySwarm --hostname mySwarm-02 --timeout 30 \n\n"
 
 ## Set default options
-TIMEOUT=60
+TIMEOUT=90
+HOSTNAMES_TO_FIND=""
 
 ## Process flags and options
 SHORTOPTS="h:t:"
@@ -34,7 +38,7 @@ while true; do
 	case ${1} in
 	    -h | --hostname)
             shift
-		    HOSTNAME_TO_FIND="$1"
+		    HOSTNAMES_TO_FIND="$1 $HOSTNAMES_TO_FIND"
 		    ;;
 		--timeout)
 		    shift
@@ -69,7 +73,6 @@ fi
 ## Note: options & flags have been 'shift'ed off the stack.
 SWARM_NAME="$1"
 
-
 ## Find an existing manager node for the requested swarm
 MANAGER_NODE_STRING=$(doctl compute droplet list \
     --tag-name ${SWARM_NAME}-manager \
@@ -77,7 +80,6 @@ MANAGER_NODE_STRING=$(doctl compute droplet list \
     --no-header \
     --access-token ${DO_ACCESS_TOKEN} | head -n1)
 
-## Get the swarm join-token from the manager node
 if [ -z "$MANAGER_NODE_STRING" ]; then
     printf "No manager node found for the \"${SWARM_NAME}\" swarm. Does the swarm exist yet?\n\n" 1>&2
     exit 1
@@ -88,24 +90,27 @@ else
     MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
     MANAGER_IP=${MANAGER_NODE_ARRAY[2]}
 
-    SSH_COMMAND="docker node ls --format \"{{.Hostname}},{{.Status}},{{.Availability}}\""
+    ## The following 3 commands will all be run on the remote docker manager:
+    ## getStatus() will return the status of a single docker node (i.e. "Ready")
+    FUNCTION_GETSTATUS="function getStatus() { docker node ls --format \"{{.Hostname}},{{.Status}}\" | grep \"\$1\" | cut -d',' -f2; }"
 
-    TIMER=0
-    RESPONSE=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "${SSH_COMMAND}")
-    HOST_STATUS=$(echo ${RESPONSE} | grep ${HOSTNAME_TO_FIND} | cut -d',' -f2)
+    ## allReady() accepts a list of hostnames and returns the word "Ready" if ALL hostnames have a status of "Ready"
+    FUNCTION_ALL_READY="function allReady() { STATUS=\"Ready\"; for NODE in \$(echo \"\$1\" | cut -d' ' -f1-); do if [[ \$(getStatus \"\$NODE\") != \"Ready\" ]]; then STATUS=\"Pending\"; fi; done; printf \$STATUS; }"
 
-    while [[ ${HOST_STATUS} != "Ready" ]] && [[ ${TIMER} < ${TIMEOUT} ]]; do
-        printf "The ${HOSTNAME_TO_FIND} node isn\'t ready yet. Waiting 10 seconds...\n"
-        sleep 10
-        let TIMER=TIMER+10
+    ## This polling loop calls the allReady() function every 5 seconds until it returns "Ready" or the timeout is reached.
+    SSH_LOOP="export TIMER=0; while [[ \$(allReady \"$HOSTNAMES_TO_FIND\") != Ready ]] && [[ \${TIMER} < ${TIMEOUT} ]]; do let TIMER=TIMER+5 && sleep 5; done && if [[ \$(allReady \"$HOSTNAMES_TO_FIND\") == \"Ready\" ]]; then echo \"Ready\"; else echo \"Timeout\"; fi"
 
-        RESPONSE=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "${SSH_COMMAND}")
-        HOST_STATUS=$(echo ${RESPONSE} | grep ${HOSTNAME_TO_FIND} | cut -d',' -f2)
+    HOST_STATUS=""
+    START_TIME=$SECONDS
+    ## Use a loop to retry the SSH connection if it fails
+    while [[ "$HOST_STATUS" != "Ready" ]] && [[ $(( SECONDS - START_TIME )) -lt ${TIMEOUT} ]]; do
+        HOST_STATUS=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "${FUNCTION_GETSTATUS}; ${FUNCTION_ALL_READY}; ${SSH_LOOP};")
+        if [[ $? -ne 0 ]]; then sleep 30; fi  ## Attempt to wait out an SSH rate-limit failure before retrying
     done
 
     if [[ ${HOST_STATUS} == "Ready" ]]; then
-        printf "The ${HOSTNAME_TO_FIND} node is READY!\n\n"
+        printf "Nodes ${HOSTNAMES_TO_FIND} are all READY!\n\n"
     else
-        printf "The ${HOSTNAME_TO_FIND} node still isn\'t ready. Polling has timed out.\n\n"
+        printf "Some nodes still aren\'t ready. Polling has timed out.\n\n"
     fi
 fi
