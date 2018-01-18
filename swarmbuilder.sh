@@ -142,44 +142,19 @@ case "$SUBCOMMAND" in
         ## Read arguments
         SWARM_NAME="$1"; shift
 
-        function WAIT_FOR_MANAGER () {
-            ## Poll a manager node until it the docker swarm is initialized.  Only keep trying if expected failures occur:
-            ##   If the droplet isn't active yet, it will reject the SSH connection attempt - we'll try again in 10 seconds.
-            ##   If the droplet is active, but 'docker swarm init' operation hasn't completed, it will report
-            ##   that "This node is not a swarm manager".  We'll try again.
-            ## Other errors will break the polling loop.
-
-            MANAGER_NAME=${1}
-            RESPONSE="This node is not a swarm manager"
-            TIMER=0
-            while [[ ( ${RESPONSE} == *"This node is not a swarm manager"*  ||  ${RESPONSE} == *"Connection refused"* ) ]] && [[ ${TIMER} < 120 ]]; do
-                RESPONSE=$(yes | doctl compute ssh ${MANAGER_NAME} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node ls")
-                printf "Docker hasn\'t initialized the swarm manager yet. Waiting 10 seconds...\n"
-                sleep 10
-                let TIMER=TIMER+10
-            done
-
-            if [[ ${RESPONSE} == *"This node is not a swarm manager"* ]]; then
-                printf "Manager node \"${MANAGER_NAME}\" still hasn\'t initialized the swarm.  Try in a few minutes.\n"
-                exit 1
-            fi
-
-            printf "Manager node ${MANAGER_NAME} is ready!\n"
-        }
 
         ## Create the swarm
         ./create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 1
+
+        ## Wait for docker to initialize the swarm (so a swarm join token will be available) before adding workers
         printf "\nWaiting for swarm manager to initialize the swarm..."
-        WAIT_FOR_MANAGER "${SWARM_NAME}-01"
+        ./poll-for-active-node.sh "$SWARM_NAME" --hostname "$SWARM_NAME-01"
         printf "\n"
         if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
             ./add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
         fi
 
         if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
-            printf "\nWaiting for workers to join the swarm..."
-            sleep 30
-            printf "done\n"
             ./add-manager.sh "$SWARM_NAME" --add "$MANAGERS_TO_ADD" --token "$DO_ACCESS_TOKEN" || exit 1
         fi
         ;;
@@ -231,8 +206,12 @@ case "$SUBCOMMAND" in
             --no-header \
             --access-token ${DO_ACCESS_TOKEN} )
 
-        readarray -t ALL_WORKER_NODES <<< "$WORKER_NODES_STRING"
-        WORKER_NODES_COUNT=${#ALL_WORKER_NODES[@]}
+        if [[ -n "$WORKER_NODES_STRING" ]]; then
+            readarray -t ALL_WORKER_NODES <<< "$WORKER_NODES_STRING"
+            WORKER_NODES_COUNT=${#ALL_WORKER_NODES[@]}
+        else
+            WORKER_NODES_COUNT=0
+        fi
         WORKERS_TO_ADD=$((WORKERS_DESIRED - WORKER_NODES_COUNT))
         WORKERS_TO_REMOVE=$((WORKERS_TO_ADD * -1))
 
@@ -246,13 +225,10 @@ case "$SUBCOMMAND" in
             exit 0
         elif [[ ${WORKERS_DESIRED} -eq ${WORKER_NODES_COUNT} ]]; then
             printf "This swarm already has ${WORKERS_DESIRED} worker nodes.\n"
-#            exit 0
-#        else
-            printf "Something went wrong. Debugging info:\n"
-            echo "WORKERS_DESIRED: ${WORKERS_DESIRED}"
-            echo "WORKER_NODES_COUNT: ${WORKER_NODES_COUNT}"
-            echo "WORKERS_TO_ADD: ${WORKERS_TO_ADD}"
-            echo "WORKERS_TO_REMOVE: ${WORKERS_TO_REMOVE}"
+            exit 0
+        else
+            printf "Couldn\'t determine whether to add or remove worker nodes.\n" 1>&2
+            exit 1
         fi
         ;;
 
@@ -293,7 +269,7 @@ case "$SUBCOMMAND" in
         done
 
         ## Enforce required arguments
-        if [[ $# -eq 0 ]] || [[ -z "$STACK_NAME" ]] || [[ -z "REPLICAS_DESIRED_QTY" ]]; then
+        if [[ $# -eq 0 ]] || [[ -z "$STACK_NAME" ]] || [[ -z "$REPLICAS_DESIRED_QTY" ]]; then
             printf "$SCALE_STACK_USAGE"
             exit 0
         fi
@@ -317,7 +293,7 @@ case "$SUBCOMMAND" in
 
         printf "The ${SWARM_NAME} swarm currently has ${ALL_NODES_QTY} nodes (including managers)... "
 
-        if [[ ${WORKERS_TO_ADD} > 0 ]]; then
+        if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
             printf "Adding ${WORKERS_TO_ADD} worker(s) to the ${SWARM_NAME} swarm...\n"
             ./add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --wait --token "$DO_ACCESS_TOKEN" || exit 1
         else
@@ -327,7 +303,10 @@ case "$SUBCOMMAND" in
         ## Scale the '-web' service for the specified stack
         ./scale-service.sh ${SWARM_NAME} --service ${SERVICE_NAME} --replicas ${REPLICAS_DESIRED_QTY} --token ${DO_ACCESS_TOKEN}
 
-        ## TODO: Check for idle nodes and prune unused droplets
+        ## Output a summary of the service status
+        doctl compute ssh "${SWARM_NAME}-01" --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker service ps ${SERVICE_NAME}"
+
+        ## TODO: Check for idle nodes and prune unused droplets. Use `docker node ps mySwarm-01 mySwarm-02 mySwarm...`
 
         ;;
     destroy)
