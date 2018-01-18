@@ -29,12 +29,21 @@ To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampl
         --deploy ./docker-compose.yml
         
 ### Changing the number of workers in the swarm
-Add more worker nodes to the swarm (and subsequently increase the replicas of your web app).  This command only changes the number of replicas of the service named ‘web’ (by convention), defined in the application’s docker-compose.yml file:
+Add or remove worker nodes from the swarm.
 
-    $ swarmbuilder.sh scale exampleSwarmName --workers 5
+    $ swarmbuilder.sh scale-swarm exampleSwarmName --workers 5
     
 *Note that scaling the number of managers is not currently supported.*
 
+### Scaling a service stack
+Increase or decrease the number of replicas of your web app).
+This command only changes the number of replicas of the service named ‘web’ (by convention), defined in the application’s docker-compose.yml file:
+When increasing the number of replicas, additional worker nodes will be created to prevent
+any one node from running more than 1 replica of the same service.
+Nodes will not be deleted when decreasing the number of replicas.
+
+    $ swarmbuilder.sh scale-stack exampleSwarmName --stack webApp --replicas 3
+    
 ### Updating application code in the swarm
 When the application code has been updated, a new docker image must be built and pushed to the Docker registry before the swarm can be updated.  Once the image is available through the registry, updating the swarm can be done like this:
 

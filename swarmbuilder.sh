@@ -15,7 +15,8 @@ $(basename "$0") [command] [flags]
 
 Available commands:
     create          Create a new swarm on fresh droplets.
-    scale           Change the number of nodes in the swarm (and the number of droplets).
+    scale-swarm     Change the number of nodes in the swarm (and the number of droplets).
+    scale-stack     Change the number of replicas of a service stack running in the swarm.
     destroy         Destroy the entire swarm and delete all its droplets.
 
 Flags:
@@ -28,7 +29,7 @@ Usage:
 $(basename "$0") create <swarmName> [flags]
 
 Where:
-    swarmName       The name of the swarm to be created.
+    <swarmName>     The name of the swarm to be created.
                      All droplets and swarm nodes will use this as their base name.
 
 Flags:
@@ -37,17 +38,31 @@ Flags:
     -t, --token     Your DigitalOcean API key (optional).
                      If omitted here, it must be provided in \'config.sh\'\n\n"
 
-SCALE_USAGE="\nChange the number of worker nodes in the swarm.
+SCALE_SWARM_USAGE="\nChange the number of worker nodes in the swarm.
 
 Usage:
-$(basename "$0") scale <swarmName> --workers [flags]
+$(basename "$0") scale-swarm <swarmName> --workers <#> [flags]
 
 Where:
-    swarmName       The name of the swarm to be created.
+    <swarmName>     The name of the swarm to be scaled.
                      All droplets and swarm nodes will use this as their base name.
+    --workers       The integer number of worker nodes that should exist.
 
 Flags:
-    --workers       The integer number of worker nodes that should exist.
+    -t, --token     Your DigitalOcean API key (optional).
+                     If omitted here, it must be provided in \'config.sh\'\n\n"
+
+SCALE_STACK_USAGE="\nChange the number of replicas of the \'-web\' service in a stack.
+
+Usage:
+$(basename "$0") scale-stack <swarmName> --stack <stackName> --replicas <#> [flags]
+
+Where:
+    <swarmName>     The name of the swarm that is hosting the stack to be scaled.
+    --stack         The name of the service stack to be scaled. Only the service named \'stackName-web\' will be scaled.
+    --replicas      The integer number of replicas of the web service that should exist on the swarm.
+
+Flags:
     -t, --token     Your DigitalOcean API key (optional).
                      If omitted here, it must be provided in \'config.sh\'\n\n"
 
@@ -57,7 +72,7 @@ Usage:
 $(basename "$0") destroy <swarmName> [flags]
 
 Where:
-    swarmName       The name of the swarm to be destroyed.
+    <swarmName>     The name of the swarm to be destroyed.
                      All droplets in this swarm will be deleted.
 
 Flags:
@@ -70,7 +85,6 @@ if [[ $# -eq 0 ]]; then
     exit 0
 
 fi
-
 
 
 ## Determine which subcommand was requested
@@ -128,46 +142,24 @@ case "$SUBCOMMAND" in
         ## Read arguments
         SWARM_NAME="$1"; shift
 
-        function WAIT_FOR_MANAGER () {
-            MANAGER_NAME=${1}
-            RESPONSE="This node is not a swarm manager"
-            TIMER=0
-            while [[ ( ${RESPONSE} == *"This node is not a swarm manager"*  ||  ${RESPONSE} == *"Connection refused"* ) ]] && [[ ${TIMER} < 120 ]]; do
-                RESPONSE=$(yes | doctl compute ssh ${MANAGER_NAME} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node ls")
-                printf "Docker hasn\'t initialized the swarm manager yet. Waiting 10 seconds...\n"
-                sleep 10
-                let TIMER=TIMER+10
-            done
-
-            if [[ ${RESPONSE} == *"This node is not a swarm manager"* ]]; then
-                printf "Manager node \"${MANAGER_NAME}\" still hasn\'t initialized the swarm.  Try in a few minutes.\n"
-                exit 1
-            fi
-
-            printf "Manager node ${MANAGER_NAME} is ready!\n"
-        }
 
         ## Create the swarm
         ./create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 1
+
+        ## Wait for docker to initialize the swarm (so a swarm join token will be available) before adding workers
         printf "\nWaiting for swarm manager to initialize the swarm..."
-        WAIT_FOR_MANAGER "${SWARM_NAME}-01"
+        ./poll-for-active-node.sh "$SWARM_NAME" --hostname "$SWARM_NAME-01"
         printf "\n"
         if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
-            spawn ./add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
-            expect {
-                "(yes/no"
-
+            ./add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
         fi
 
         if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
-            printf "\nWaiting for workers to join the swarm..."
-            sleep 30
-            printf "done\n"
             ./add-manager.sh "$SWARM_NAME" --add "$MANAGERS_TO_ADD" --token "$DO_ACCESS_TOKEN" || exit 1
         fi
         ;;
 
-    scale)
+    scale-swarm)
         ## Set default options
         ## This command has no defaults
 
@@ -200,7 +192,7 @@ case "$SUBCOMMAND" in
         done
 
         if [[ $# -eq 0 ]] || [[ -z "$WORKERS_DESIRED" ]]; then
-            printf "$SCALE_USAGE"
+            printf "$SCALE_SWARM_USAGE"
             exit 0
         fi
 
@@ -214,8 +206,12 @@ case "$SUBCOMMAND" in
             --no-header \
             --access-token ${DO_ACCESS_TOKEN} )
 
-        readarray -t ALL_WORKER_NODES <<< "$WORKER_NODES_STRING"
-        WORKER_NODES_COUNT=${#ALL_WORKER_NODES[@]}
+        if [[ -n "$WORKER_NODES_STRING" ]]; then
+            readarray -t ALL_WORKER_NODES <<< "$WORKER_NODES_STRING"
+            WORKER_NODES_COUNT=${#ALL_WORKER_NODES[@]}
+        else
+            WORKER_NODES_COUNT=0
+        fi
         WORKERS_TO_ADD=$((WORKERS_DESIRED - WORKER_NODES_COUNT))
         WORKERS_TO_REMOVE=$((WORKERS_TO_ADD * -1))
 
@@ -227,12 +223,92 @@ case "$SUBCOMMAND" in
             printf "Removing ${WORKERS_TO_REMOVE} worker(s) from the ${SWARM_NAME} swarm\n"
             ./remove-worker.sh "$SWARM_NAME" --remove "$WORKERS_TO_REMOVE" --token "$DO_ACCESS_TOKEN" || exit 1
             exit 0
-        else
+        elif [[ ${WORKERS_DESIRED} -eq ${WORKER_NODES_COUNT} ]]; then
             printf "This swarm already has ${WORKERS_DESIRED} worker nodes.\n"
             exit 0
+        else
+            printf "Couldn\'t determine whether to add or remove worker nodes.\n" 1>&2
+            exit 1
         fi
         ;;
 
+    scale-stack)
+        ## Set default options
+        ## This command has no defaults
+
+        ## Process flags and options
+        SHORTOPTS="t:"
+        LONGOPTS="token:,stack:,replicas:"
+        ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
+        eval set -- ${ARGS}
+
+        while true; do
+            case ${1} in
+                --stack)
+                    shift
+                    STACK_NAME="$1"
+                    ;;
+                --replicas)
+                    shift
+                    REPLICAS_DESIRED_QTY="$1"
+                    ;;
+                -t | --token )
+                    shift
+                    DO_ACCESS_TOKEN="$1"
+                    ;;
+                -- )
+                    shift
+                    break
+                    ;;
+                * )
+                    shift
+                    break
+                    ;;
+            esac
+            shift;
+        done
+
+        ## Enforce required arguments
+        if [[ $# -eq 0 ]] || [[ -z "$STACK_NAME" ]] || [[ -z "$REPLICAS_DESIRED_QTY" ]]; then
+            printf "$SCALE_STACK_USAGE"
+            exit 0
+        fi
+
+        ## Read arguments
+        SWARM_NAME="$1"; shift
+        SERVICE_NAME="${STACK_NAME}-web"  # Assume that the service to be scaled is named 'web' within the requested stack
+
+        ## Determine whether we need to add new worker nodes
+
+        ## Count the current number of nodes in the swarm (workers AND managers, since both can accept tasks)
+        ALL_NODES_STRING=$(doctl compute droplet list \
+            --tag-name ${SWARM_NAME} \
+            --format Name \
+            --no-header \
+            --access-token ${DO_ACCESS_TOKEN} )
+
+        readarray -t ALL_NODES <<< "$ALL_NODES_STRING"
+        ALL_NODES_QTY=${#ALL_NODES[@]}
+        WORKERS_TO_ADD=$((REPLICAS_DESIRED_QTY - ALL_NODES_QTY))
+
+        printf "The ${SWARM_NAME} swarm currently has ${ALL_NODES_QTY} nodes (including managers)... "
+
+        if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
+            printf "Adding ${WORKERS_TO_ADD} worker(s) to the ${SWARM_NAME} swarm...\n"
+            ./add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --wait --token "$DO_ACCESS_TOKEN" || exit 1
+        else
+            printf "No new droplets are needed to achieve ${REPLICAS_DESIRED_QTY} replicas.\n"
+        fi
+
+        ## Scale the '-web' service for the specified stack
+        ./scale-service.sh ${SWARM_NAME} --service ${SERVICE_NAME} --replicas ${REPLICAS_DESIRED_QTY} --token ${DO_ACCESS_TOKEN}
+
+        ## Output a summary of the service status
+        doctl compute ssh "${SWARM_NAME}-01" --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker service ps ${SERVICE_NAME}"
+
+        ## TODO: Check for idle nodes and prune unused droplets. Use `docker node ps mySwarm-01 mySwarm-02 mySwarm...`
+
+        ;;
     destroy)
         ## Set default options
         ## This command has no defaults
