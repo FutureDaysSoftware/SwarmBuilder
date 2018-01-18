@@ -113,6 +113,8 @@ case "$SUBCOMMAND" in
                     MANAGERS_TO_ADD=$(($1 - 1))
                     if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
                         FLAGS=" --wait"
+                    elif [[ ${MANAGERS_TO_ADD} -lt 0 ]]; then
+                        printf "\nYou must have at least 1 manager in the swarm\n\n" 1>&2; exit 1;
                     fi
                     ;;
                 --workers)
@@ -155,7 +157,7 @@ case "$SUBCOMMAND" in
         ./create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 1
 
         ## Wait for docker to initialize the swarm (so a swarm join token will be available) before adding workers
-        printf "\nWaiting for swarm manager to initialize the swarm..."
+        printf "\nWaiting for swarm manager to initialize the swarm...\n"
         ./poll-for-active-node.sh "$SWARM_NAME" --hostname "$SWARM_NAME-01"
         printf "\n"
         if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
