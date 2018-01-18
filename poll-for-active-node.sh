@@ -74,43 +74,28 @@ fi
 SWARM_NAME="$1"
 
 ## Find an existing manager node for the requested swarm
-MANAGER_NODE_STRING=$(doctl compute droplet list \
-    --tag-name ${SWARM_NAME}-manager \
-    --format Name,ID,PublicIPv4 \
-    --no-header \
-    --access-token ${DO_ACCESS_TOKEN} | head -n1)
+MANAGER_ID=$(./get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
 
-if [ -z "$MANAGER_NODE_STRING" ]; then
-    printf "No manager node found for the \"${SWARM_NAME}\" swarm. Does the swarm exist yet?\n\n" 1>&2
-    exit 1
+## The following 3 commands will all be run on the remote docker manager:
+## getStatus() will return the status of a single docker node (i.e. "Ready")
+FUNCTION_GETSTATUS="function getStatus() { docker node ls --format \"{{.Hostname}},{{.Status}}\" | grep \"\$1\" | cut -d',' -f2; }"
+
+## allReady() accepts a list of hostnames and returns the word "Ready" if ALL hostnames have a status of "Ready"
+FUNCTION_ALL_READY="function allReady() { STATUS=\"Ready\"; for NODE in \$(echo \"\$1\" | cut -d' ' -f1-); do if [[ \$(getStatus \"\$NODE\") != \"Ready\" ]]; then STATUS=\"Pending\"; fi; done; printf \$STATUS; }"
+
+## This polling loop calls the allReady() function every 5 seconds until it returns "Ready" or the timeout is reached.
+SSH_LOOP="export TIMER=0; while [[ \$(allReady \"$HOSTNAMES_TO_FIND\") != Ready ]] && [[ \${TIMER} < ${TIMEOUT} ]]; do let TIMER=TIMER+5 && sleep 5; done && if [[ \$(allReady \"$HOSTNAMES_TO_FIND\") == \"Ready\" ]]; then echo \"Ready\"; else echo \"Timeout\"; fi"
+
+HOST_STATUS=""
+START_TIME=$SECONDS
+## Use a loop to retry the SSH connection if it fails
+while [[ "$HOST_STATUS" != "Ready" ]] && [[ $(( SECONDS - START_TIME )) -lt ${TIMEOUT} ]]; do
+    HOST_STATUS=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "${FUNCTION_GETSTATUS}; ${FUNCTION_ALL_READY}; ${SSH_LOOP};")
+    if [[ $? -ne 0 ]]; then sleep 30; fi  ## Attempt to wait out an SSH rate-limit failure before retrying
+done
+
+if [[ ${HOST_STATUS} == "Ready" ]]; then
+    printf "Nodes ${HOSTNAMES_TO_FIND} are all READY!\n\n"
 else
-
-    MANAGER_NODE_ARRAY=(${MANAGER_NODE_STRING})
-    MANAGER_NAME=${MANAGER_NODE_ARRAY[0]}
-    MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
-    MANAGER_IP=${MANAGER_NODE_ARRAY[2]}
-
-    ## The following 3 commands will all be run on the remote docker manager:
-    ## getStatus() will return the status of a single docker node (i.e. "Ready")
-    FUNCTION_GETSTATUS="function getStatus() { docker node ls --format \"{{.Hostname}},{{.Status}}\" | grep \"\$1\" | cut -d',' -f2; }"
-
-    ## allReady() accepts a list of hostnames and returns the word "Ready" if ALL hostnames have a status of "Ready"
-    FUNCTION_ALL_READY="function allReady() { STATUS=\"Ready\"; for NODE in \$(echo \"\$1\" | cut -d' ' -f1-); do if [[ \$(getStatus \"\$NODE\") != \"Ready\" ]]; then STATUS=\"Pending\"; fi; done; printf \$STATUS; }"
-
-    ## This polling loop calls the allReady() function every 5 seconds until it returns "Ready" or the timeout is reached.
-    SSH_LOOP="export TIMER=0; while [[ \$(allReady \"$HOSTNAMES_TO_FIND\") != Ready ]] && [[ \${TIMER} < ${TIMEOUT} ]]; do let TIMER=TIMER+5 && sleep 5; done && if [[ \$(allReady \"$HOSTNAMES_TO_FIND\") == \"Ready\" ]]; then echo \"Ready\"; else echo \"Timeout\"; fi"
-
-    HOST_STATUS=""
-    START_TIME=$SECONDS
-    ## Use a loop to retry the SSH connection if it fails
-    while [[ "$HOST_STATUS" != "Ready" ]] && [[ $(( SECONDS - START_TIME )) -lt ${TIMEOUT} ]]; do
-        HOST_STATUS=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "${FUNCTION_GETSTATUS}; ${FUNCTION_ALL_READY}; ${SSH_LOOP};")
-        if [[ $? -ne 0 ]]; then sleep 30; fi  ## Attempt to wait out an SSH rate-limit failure before retrying
-    done
-
-    if [[ ${HOST_STATUS} == "Ready" ]]; then
-        printf "Nodes ${HOSTNAMES_TO_FIND} are all READY!\n\n"
-    else
-        printf "Some nodes still aren\'t ready. Polling has timed out.\n\n"
-    fi
+    printf "Some nodes still aren\'t ready. Polling has timed out.\n\n"
 fi

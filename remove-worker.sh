@@ -60,22 +60,7 @@ fi
 SWARM_NAME="$1"
 
 ## Find a manager node for the requested swarm
-MANAGER_NODE_STRING=$(doctl compute droplet list \
-    --tag-name ${SWARM_NAME}-manager \
-    --format Name,ID \
-    --no-header \
-    --access-token ${DO_ACCESS_TOKEN} | head -n1)
-
-## Get the address of the manager node
-if [ -z "$MANAGER_NODE_STRING" ]; then
-    printf "No manager node found for the \"${SWARM_NAME}\" swarm. Does the swarm exist yet?\n\n" 1>&2
-    exit 1
-else
-    MANAGER_NODE_ARRAY=(${MANAGER_NODE_STRING})
-    MANAGER_NAME=${MANAGER_NODE_ARRAY[0]}
-    MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
-fi
-
+MANAGER_ID=$(./get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
 
 ## Get a list of all worker nodes in the requested swarm, sorted in reverse alphanumerical order
 WORKER_NODES_STRING=$(doctl compute droplet list \
@@ -104,7 +89,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
     printf "Draining tasks from node \"${NODE_NAME}\"..."
-	yes | doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
+    ./ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
 	printf "done\n"
 done
 printf "\n"
@@ -118,7 +103,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
 	printf "Removing ${NODE_NAME} from the swarm..."
-	yes | doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
+    ./ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
 	printf "done\n"
 done
 printf "\n"

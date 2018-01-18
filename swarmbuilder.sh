@@ -52,7 +52,7 @@ Flags:
     -t, --token     Your DigitalOcean API key (optional).
                      If omitted here, it must be provided in \'config.sh\'\n\n"
 
-SCALE_STACK_USAGE="\nChange the number of replicas of the \'-web\' service in a stack.
+SCALE_STACK_USAGE="\nChange the number of replicas of the \'_web\' service in a stack.
 
 Usage:
 $(basename "$0") scale-stack <swarmName> --stack <stackName> --replicas <#> [flags]
@@ -97,11 +97,12 @@ case "$SUBCOMMAND" in
         ## Set default options
         MANAGERS_TO_ADD=0
         WORKERS_TO_ADD=0
+        COMPOSE_FILE=""
         FLAGS=""
 
         ## Process flags and options
-        SHORTOPTS="t:"
-        LONGOPTS="token:,managers:,workers:"
+        SHORTOPTS="t:,d:"
+        LONGOPTS="token:,managers:,workers:,deploy:"
         ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
         eval set -- ${ARGS}
 
@@ -117,6 +118,13 @@ case "$SUBCOMMAND" in
                 --workers)
                     shift
                     WORKERS_TO_ADD="$1"
+                    ;;
+                -d | --deploy)
+                    shift
+                    COMPOSE_FILE="$1"
+                    if [ ! -f "$COMPOSE_FILE" ]; then
+                        printf "\nThe file \'${COMPOSE_FILE}\' could not be found. You must provide a valid \'docker-compose.yml\' file." 1>&2; exit 1
+                    fi
                     ;;
                 -t | --token )
                     shift
@@ -141,7 +149,7 @@ case "$SUBCOMMAND" in
 
         ## Read arguments
         SWARM_NAME="$1"; shift
-
+        MANAGER_NAME="${SWARM_NAME}-01"  # This assumption is generally safe and saves an API call. Replace with a lookup if it causes problems.
 
         ## Create the swarm
         ./create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 1
@@ -155,7 +163,11 @@ case "$SUBCOMMAND" in
         fi
 
         if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
-            ./add-manager.sh "$SWARM_NAME" --add "$MANAGERS_TO_ADD" --token "$DO_ACCESS_TOKEN" || exit 1
+            ./add-manager.sh ${SWARM_NAME} --add ${MANAGERS_TO_ADD} --token ${DO_ACCESS_TOKEN} || exit 1
+        fi
+
+        if [[ -n ${COMPOSE_FILE} ]]; then
+            ./deploy-stack.sh ${SWARM_NAME} --compose-file ${COMPOSE_FILE} --token ${DO_ACCESS_TOKEN}
         fi
         ;;
 
@@ -276,7 +288,7 @@ case "$SUBCOMMAND" in
 
         ## Read arguments
         SWARM_NAME="$1"; shift
-        SERVICE_NAME="${STACK_NAME}-web"  # Assume that the service to be scaled is named 'web' within the requested stack
+        SERVICE_NAME="${STACK_NAME}_web"  # Assume that the service to be scaled is named 'web' within the requested stack
 
         ## Determine whether we need to add new worker nodes
 
@@ -304,7 +316,7 @@ case "$SUBCOMMAND" in
         ./scale-service.sh ${SWARM_NAME} --service ${SERVICE_NAME} --replicas ${REPLICAS_DESIRED_QTY} --token ${DO_ACCESS_TOKEN}
 
         ## Output a summary of the service status
-        doctl compute ssh "${SWARM_NAME}-01" --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker service ps ${SERVICE_NAME}"
+        ./ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker service ps ${SERVICE_NAME}"
 
         ## TODO: Check for idle nodes and prune unused droplets. Use `docker node ps mySwarm-01 mySwarm-02 mySwarm...`
 

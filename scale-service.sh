@@ -67,25 +67,5 @@ fi
 SWARM_NAME="$1"
 
 
-## Find a manager node for the requested swarm
-MANAGER_NODE_STRING=$(doctl compute droplet list \
-    --tag-name ${SWARM_NAME}-manager \
-    --format Name,ID,PublicIPv4 \
-    --no-header \
-    --access-token ${DO_ACCESS_TOKEN} | head -n1)
-
 ## Connect to the manager and scale the service
-if [ -z "$MANAGER_NODE_STRING" ]; then
-    printf "No manager node found for the \"${SWARM_NAME}\" swarm. Does the swarm exist yet?\n\n" 1>&2
-    exit 1
-else
-
-    MANAGER_NODE_ARRAY=(${MANAGER_NODE_STRING})
-    MANAGER_NAME=${MANAGER_NODE_ARRAY[0]}
-    MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
-    MANAGER_IP=${MANAGER_NODE_ARRAY[2]}
-
-	yes | doctl compute ssh ${MANAGER_ID} \
-	--access-token ${DO_ACCESS_TOKEN} \
-	--ssh-command "docker service scale ${SERVICE_NAME}=${REPLICAS_DESIRED_QTY}"
-fi
+./ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker service scale ${SERVICE_NAME}=${REPLICAS_DESIRED_QTY}"
