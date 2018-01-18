@@ -79,7 +79,7 @@ SWARM_NAME="$1"
 ## Find a manager node for the requested swarm
 MANAGER_NODE_STRING=$(doctl compute droplet list \
     --tag-name ${SWARM_NAME}-manager \
-    --format Name,ID,PublicIPv4 \
+    --format ${FORMAT} \
     --no-header \
     --access-token ${DO_ACCESS_TOKEN} | head -n1)
 
