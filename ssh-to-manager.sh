@@ -6,11 +6,11 @@
 USAGE="\nExecute a command on a manager node.
 
 Usage:
-$(basename "$0") --command <COMMAND> --token <TOKEN> [OPTIONS]
+$(basename "$0") --ssh-command <COMMAND> --token <TOKEN> [OPTIONS]
 
 where:
     exampleSwarmName    The name of an existing swarm.
-    -c, --command       The command to execute on the remote host.
+    -c, --ssh-command   The command to execute on the remote host.
     -t, --token         Your DigitalOcean API key.
 
 Available Options:
@@ -27,13 +27,13 @@ MANAGER_ID=""
 
 ## Process flags and options
 SHORTOPTS="t:,c:"
-LONGOPTS="command:,token:,manager-id:"
+LONGOPTS="ssh-command:,token:,swarm:,manager-id:"
 ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
 eval set -- ${ARGS}
 
 while true; do
 	case ${1} in
-		-c | --command)
+		-c | --ssh-command)
 		    shift
 		    SSH_COMMAND="$1"
 		    shift
@@ -64,10 +64,10 @@ while true; do
 	esac
 done
 
-if [[ $# -eq 0 ]] || [[ -z "$SSH_COMMAND" ]]; then
+if [[ $# -eq 0 ]] && [[ -z "$MANAGER_ID" ]] && [[ -z "$SWARM_NAME" ]]; then
     printf "$USAGE"
     exit 0
-elif [[ -z "$MANAGER_ID" ]] && [[ -z "$SWARM_NAME" ]]; then
+elif [[ -z "$SSH_COMMAND" ]]; then
     printf "$USAGE"
     exit 0
 elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
