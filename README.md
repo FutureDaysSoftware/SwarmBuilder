@@ -20,7 +20,7 @@ of the one in your config file.
 ## Usage
 
 ### Creating a New Swarm
-To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampleSwarmName-1`, `exampleSwarmName-2`, and `exampleSwarmName-3` that will be publicly accessible at https://mydomain.com.  The application Stack defined by `./docker-compose.yml` will then be deployed to the Swarm:
+To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampleSwarmName-1`, `exampleSwarmName-2`, and `exampleSwarmName-3` that will be publicly accessible at https://mydomain.com.  The application Stack defined by `docker-compose.yml` will then be deployed to the Swarm:
 	
     $ swarmbuilder.sh create exampleSwarmName \
         --domain mydomain.com \

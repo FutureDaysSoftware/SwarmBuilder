@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Import config variables
-#source ./config.sh  # Config is NOT imported
+#source ${BASH_SOURCE%/*}/config.sh  # Config is NOT imported
 
 USAGE="\nExecute a command on a manager node.
 
@@ -79,7 +79,7 @@ fi
 
 ## Find a manager node to connect to
 if [[ -z "$MANAGER_ID" ]]; then
-    MANAGER_ID=$(./get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
+    MANAGER_ID=$(${BASH_SOURCE%/*}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
 fi
 
 ## Connect to the manager and scale the service

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Import config variables
-source ./config.sh
+source ${BASH_SOURCE%/*}/config.sh
 
 USAGE="Create a new swarm with a single manager node on DigitalOcean.
 
@@ -61,19 +61,7 @@ fi
 
 
 ## Create a script that will run on the new droplet as soon as it's booted up
-if [[ ! -d "cloud-init" ]]; then
-	mkdir cloud-init
-fi
-
-INIT_SCRIPT="#!/bin/bash
-ufw allow 2377/tcp
-ufw allow 7946
-ufw allow 4789
-export PUBLIC_IPV4=\$(curl -s ${DO_IP_DISCOVERY_URL})
-docker swarm init --advertise-addr \"\${PUBLIC_IPV4}:2377\""
-
-echo "$INIT_SCRIPT" > cloud-init/bootstrap.sh
-chmod a+x cloud-init/*.sh
+INIT_SCRIPT_FILENAME=$(${BASH_SOURCE%/*}/create-cloud-init-script.sh)
 
 
 ## Create the new droplet
@@ -86,6 +74,6 @@ doctl compute droplet create ${DROPLET_NAME} \
     --ssh-keys ${DO_DROPLET_SSH_KEYS} \
     --tag-names "swarm,$SWARM_NAME,$SWARM_NAME-manager" \
     --access-token ${DO_ACCESS_TOKEN} \
-    --user-data-file ./cloud-init/bootstrap.sh \
+    --user-data-file ${INIT_SCRIPT_FILENAME} \
     ${DO_DROPLET_FLAGS}
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Import config variables
-source ./config.sh
+source ${BASH_SOURCE%/*}/config.sh
 
 USAGE="\nDestroy ALL nodes in the specified Swarm
 

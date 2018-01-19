@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Import config variables
-source ./config.sh
+source ${BASH_SOURCE%/*}/config.sh
 
 USAGE="\nRemove worker nodes from an existing swarm.
 
@@ -60,7 +60,7 @@ fi
 SWARM_NAME="$1"
 
 ## Find a manager node for the requested swarm
-MANAGER_ID=$(./get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
+MANAGER_ID=$(${BASH_SOURCE%/*}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
 
 ## Get a list of all worker nodes in the requested swarm, sorted in reverse alphanumerical order
 WORKER_NODES_STRING=$(doctl compute droplet list \
@@ -89,7 +89,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
     printf "Draining tasks from node \"${NODE_NAME}\"..."
-    ./ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
+    ${BASH_SOURCE%/*}/ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
 	printf "done\n"
 done
 printf "\n"
@@ -103,7 +103,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
 	printf "Removing ${NODE_NAME} from the swarm..."
-    ./ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
+    ${BASH_SOURCE%/*}/ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
 	printf "done\n"
 done
 printf "\n"

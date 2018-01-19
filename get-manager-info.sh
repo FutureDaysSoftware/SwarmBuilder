@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Import config variables
-#source ./config.sh  # Config is NOT imported
+#source ${BASH_SOURCE%/*}/config.sh  # Config is NOT imported
 
 USAGE="\nFind a manager node for a swarm and return info about it. If there is more than 1 manager node in the swarm,
 info will be reported for the one with the name that occurs first alphabetically.
