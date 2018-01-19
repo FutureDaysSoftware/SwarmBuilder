@@ -18,6 +18,7 @@ Available commands:
     scale-swarm     Change the number of nodes in the swarm (and the number of droplets).
     scale-stack     Change the number of replicas of a service stack running in the swarm.
     remove-stack    Completely remove a stack from the swarm.
+    deploy          Deploy a new service stack or update an existing stack in the swarm.
     destroy         Destroy the entire swarm and delete all its droplets.
 
 Flags:
@@ -342,6 +343,10 @@ case "$SUBCOMMAND" in
 
     remove-stack)
         ${BASH_SOURCE%/*}/remove-stack.sh "$@"
+        ;;
+
+    deploy)
+        ${BASH_SOURCE%/*}/deploy-stack.sh "$@"
         ;;
 
     destroy)
