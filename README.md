@@ -2,6 +2,9 @@
 A set of Bash scripts to build a web hosting environment using Docker Swarm.
 
 ## Configuration
+
+**The config file**
+
 The `config.example.sh` script is a template for the config file that this script requires.
 A file named `config.sh` must exist before the scripts will run properly.  If the config file doesn't
 exist, it will be created when the `swarmbuilder.sh` script is run by making a copy of the
@@ -16,6 +19,17 @@ when running the `swarmbuilder.sh` script by passing the `-t` or `--token` argum
 If a DigitalOcean API key is set in your `config.sh` file and you also provide one on the
 command line (with the `--token` argument), the one given on the command line will be used instead
 of the one in your config file.
+
+**Adding swarmbuilder to your path**
+
+An install-script is included that will symlink the swarmbuilder.sh script into your `~/bin/` folder
+and ensure that the folder is in your path.
+
+    $ cd swarmbuilder
+    $ ./install-link.sh
+
+Once this is done, you can run the swarmbuilder script from inside any folder without providing the path.
+Also, the `.sh` file extension is omitted when using the symlinked command.
 
 ## Usage
 
