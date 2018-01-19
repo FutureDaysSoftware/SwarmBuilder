@@ -20,13 +20,17 @@ of the one in your config file.
 ## Usage
 
 ### Creating a New Swarm
-To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampleSwarmName-1`, `exampleSwarmName-2`, and `exampleSwarmName-3` that will be publicly accessible at https://mydomain.com.  The application Stack defined by `docker-compose.yml` will then be deployed to the Swarm:
+To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampleSwarmName-1`, 
+`exampleSwarmName-2`, and `exampleSwarmName-3` that will be publicly accessible at https://mydomain.com.  
+The application Stack defined by `docker-compose.yml` will then be deployed to the Swarm and will be named
+`myApp`:
 	
     $ swarmbuilder.sh create exampleSwarmName \
         --domain mydomain.com \
         --workers 2 \
         --tls \
-        --deploy ./docker-compose.yml
+        --deploy-file ./docker-compose.yml \
+        --deploy-name webApp
         
 ### Changing the number of workers in the swarm
 Add or remove worker nodes from the swarm.
@@ -44,10 +48,22 @@ Nodes will not be deleted when decreasing the number of replicas.
 
     $ swarmbuilder.sh scale-stack exampleSwarmName --stack webApp --replicas 3
     
-### Updating application code in the swarm
-When the application code has been updated, a new docker image must be built and pushed to the Docker registry before the swarm can be updated.  Once the image is available through the registry, updating the swarm can be done like this:
+### Removing a service stack
+To completely remove a service stack from the swarm, use:
 
-    $ swarmbuilder.sh update exampleSwarmName --deploy ./docker-compose.yml
+    $ swarmbuilder.sh remove-stack exampleSwarmName --stack webApp
+
+There is an optional `--force` flag that can be used to bypass the interactive confirmation.
+
+### Deploying & updating application code in the swarm
+Deploying a new stack to the swarm uses the same command as updating the code on an existing stack.
+When the application code has been updated, a new docker image must be built and pushed to the 
+Docker registry before the swarm can be updated.  Once the image is available through the registry,
+ updating the swarm can be done like this:
+
+    $ swarmbuilder.sh deploy exampleSwarmName \
+        --deploy-file ./docker-compose.yml \
+        --deploy-name webApp
 
 *Note: this requires that the naming conventions for services in the `docker-compose.yml` file be followed.*
 Behind the scenes, SwarmBuilder will look on the swarm named `exampleSwarmName` for a stack of services that is also named `exampleSwarmName` and update the stack with the provided `docker-compose.yml` file.
