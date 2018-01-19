@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Import config variables
-#source ${BASH_SOURCE%/*}/config.sh  # Config is NOT imported
+source ${BASH_SOURCE%/*}/config.sh
 
 USAGE="\nExecute a command on a manager node.
 
@@ -72,7 +72,7 @@ elif [[ -z "$SSH_COMMAND" ]]; then
     exit 0
 elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     printf "A DigitalOcean access token was not provided.
-    You must provide one on the command line when using this command.\n\n"
+    You must provide one on the command line when using this command or set one in the \'config.sh\' file.\n\n"
     exit 1
 fi
 
@@ -82,7 +82,7 @@ if [[ -z "$MANAGER_ID" ]]; then
     MANAGER_ID=$(${BASH_SOURCE%/*}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
 fi
 
-## Connect to the manager and scale the service
+## Connect to the manager and run the command
 doctl compute ssh ${MANAGER_ID} \
 	--access-token ${DO_ACCESS_TOKEN} \
 	--ssh-command "${SSH_COMMAND}"
