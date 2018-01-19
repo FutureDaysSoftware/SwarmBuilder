@@ -23,14 +23,14 @@ of the one in your config file.
 To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampleSwarmName-1`, 
 `exampleSwarmName-2`, and `exampleSwarmName-3` that will be publicly accessible at https://mydomain.com.  
 The application Stack defined by `docker-compose.yml` will then be deployed to the Swarm and will be named
-`myApp`:
+`webApp`:
 	
     $ swarmbuilder.sh create exampleSwarmName \
         --domain mydomain.com \
         --workers 2 \
         --tls \
-        --deploy-file ./docker-compose.yml \
-        --deploy-name webApp
+        --compose-file ./docker-compose.yml \
+        --stack-name webApp
         
 ### Changing the number of workers in the swarm
 Add or remove worker nodes from the swarm.
@@ -46,12 +46,12 @@ When increasing the number of replicas, additional worker nodes will be created 
 any one node from running more than 1 replica of the same service.
 Nodes will not be deleted when decreasing the number of replicas.
 
-    $ swarmbuilder.sh scale-stack exampleSwarmName --stack webApp --replicas 3
+    $ swarmbuilder.sh scale-stack exampleSwarmName --stack-name webApp --replicas 3
     
 ### Removing a service stack
 To completely remove a service stack from the swarm, use:
 
-    $ swarmbuilder.sh remove-stack exampleSwarmName --stack webApp
+    $ swarmbuilder.sh remove-stack exampleSwarmName --stack-name webApp
 
 There is an optional `--force` flag that can be used to bypass the interactive confirmation.
 
@@ -62,8 +62,8 @@ Docker registry before the swarm can be updated.  Once the image is available th
  updating the swarm can be done like this:
 
     $ swarmbuilder.sh deploy exampleSwarmName \
-        --deploy-file ./docker-compose.yml \
-        --deploy-name webApp
+        --compose-file ./docker-compose.yml \
+        --stack-name webApp
 
 *Note: this requires that the naming conventions for services in the `docker-compose.yml` file be followed.*
 Behind the scenes, SwarmBuilder will look on the swarm named `exampleSwarmName` for a stack of services that is also named `exampleSwarmName` and update the stack with the provided `docker-compose.yml` file.
