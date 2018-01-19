@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+DIR="$(dirname "$(readlink -f "$0")")/.."
 
 ## Import config variables
-source ${DIR}/config.sh
+source ${DIR}/config/config.sh
 
 USAGE="\nAdd worker nodes to an existing swarm.
 
@@ -74,14 +74,14 @@ SWARM_NAME="$1"
 
 
 ## Get the join-token for the swarm
-JOIN_TOKEN=$(${DIR}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
+JOIN_TOKEN=$(${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
 if [[ "$?" != 0 ]] || [[ -z "${JOIN_TOKEN}" ]]; then
     printf "Couldn't get the swarm join-token from manager node. Unable to add workers to the swarm.\n\n" 1>&2
     exit 1
 fi
 
 ## Get the IP address of the manager node (needed for the `swarm join` command)
-MANAGER_IP=$(${DIR}/get-manager-info.sh ${SWARM_NAME} --format PublicIPv4 --token ${DO_ACCESS_TOKEN}) || exit 1
+MANAGER_IP=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} --format PublicIPv4 --token ${DO_ACCESS_TOKEN}) || exit 1
 
 ## Find the next sequential node number to start naming the new worker droplets
 ## Method:
@@ -99,7 +99,7 @@ NEXT_INDEX_IN_SWARM=$((${LAST_INDEX_IN_SWARM} + 1))
 
 
 ## Write the cloud-init script for the new worker node(s)
-JOIN_SCRIPT_FILENAME=$(${DIR}/create-cloud-init-script.sh ${JOIN_TOKEN} ${MANAGER_IP})
+JOIN_SCRIPT_FILENAME=$(${DIR}/helpers/create-cloud-init-script.sh ${JOIN_TOKEN} ${MANAGER_IP})
 
 ## Create the new worker node(s)
 DROPLET_NAMES=""
@@ -133,7 +133,7 @@ fi
 if [[ ${POLL_NEW_NODES_UNTIL_READY} ]]; then
     printf "Waiting for new workers to join the swarm...\n"
 
-    POLLING_COMMAND="${DIR}/poll-for-active-node.sh ${SWARM_NAME}"
+    POLLING_COMMAND="${DIR}/helpers/poll-for-active-node.sh ${SWARM_NAME}"
 
     ## Send the hostname to the polling script of every new worker node that was just created
     for NODE in $(echo "$DROPLET_NAMES" | cut -d' ' -f1-); do

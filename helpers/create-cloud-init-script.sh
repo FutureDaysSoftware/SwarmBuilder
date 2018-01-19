@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+DIR="$(dirname "$(readlink -f "$0")")/.."
 
 ## Import config variables
-source ${DIR}/config.sh
+source ${DIR}/config/config.sh
 
 USAGE="\nWrite a script that can be run by a droplet at boot-time to join an existing swarm.
 

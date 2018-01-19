@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+## Set root path (up one folder from this script)
+DIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
 
 ## Import config variables
-source ${DIR}/config.sh
-source ${DIR}/helpers.sh
+source ${DIR}/config/config.sh
+source ${DIR}/helpers/helpers.sh
 
 
 ## This script adds a symlink to `./swarmbuilder.sh` at `~/bin/swarmbuilder` and ensures that `~/bin` is in your PATH.

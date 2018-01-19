@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+DIR="$(dirname "$(readlink -f "$0")")/.."
 
 ## Import config variables
-source ${DIR}/config.sh
-source ${DIR}/helpers.sh
+source ${DIR}/config/config.sh
+source ${DIR}/helpers/helpers.sh
 
 USAGE="\nRemove a service stack from the swarm
 
@@ -75,4 +75,4 @@ if [[ ${BYPASS_CONFIRMATION} != true ]]; then
 fi
 
 ## Connect to the manager and remove the stack, then output a summary of stacks remaining in the swarm
-${DIR}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack rm ${STACK_NAME} && docker stack ls"
+${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack rm ${STACK_NAME} && docker stack ls"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+DIR="$(dirname "$(readlink -f "$0")")/.."
 
 ## Import config variables
-source ${DIR}/config.sh
+source ${DIR}/config/config.sh
 
 USAGE="\nDestroy ALL nodes in the specified Swarm
 
@@ -62,6 +62,12 @@ fi
 ## Note: options & flags have been 'shift'ed off the stack.
 SWARM_NAME="$1"
 
+if [[ "$BYPASS_CONFIRMATION" == true ]]; then
+    printf "Destroying the \'${SWARM_NAME}\' swarm...\n"
+else
+    printf "Locating swarm droplets, standby for confirmation...\n"
+fi
+
 ## Get a list of all droplets in the specified swarm
 DROPLET_IDS_IN_SWARM=$(doctl compute droplet list \
     --tag-name ${SWARM_NAME} \
@@ -89,5 +95,5 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-printf "\nAll droplets in the ${SWARM_NAME} swarm have been deleted!\n\n"
+printf "\nAll droplets in the \'${SWARM_NAME}\' swarm have been deleted!\n\n"
 exit 0

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+DIR="$(dirname "$(readlink -f "$0")")/.."
 
 ## Import config variables
-source ${DIR}/config.sh
+source ${DIR}/config/config.sh
 
 USAGE="\nDeploy a service stack to the swarm
 
@@ -73,4 +73,4 @@ fi
 SWARM_NAME="$1"
 
 ## Connect to the manager and deploy the stack. Pipe the 'docker-compose.yml' file into 'docker stack deploy' through STDIN
-cat "${COMPOSE_FILE}" | ${DIR}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack deploy --compose-file - ${STACK_NAME} && docker stack ps ${STACK_NAME}"
+cat "${COMPOSE_FILE}" | ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack deploy --compose-file - ${STACK_NAME} && docker stack ps ${STACK_NAME}"

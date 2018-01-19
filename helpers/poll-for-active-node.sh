@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+DIR="$(dirname "$(readlink -f "$0")")/.."
 
 ## Import config variables
-source ${DIR}/config.sh
+source ${DIR}/config/config.sh
 
 USAGE="\nPoll a swarm manager until the specified node(s) becomes available.  If multiple hostnames are specified,
 the polling will continue until ALL of the nodes are ready.  The polling loop runs on the remote manager node to prevent
@@ -76,8 +76,8 @@ fi
 ## Note: options & flags have been 'shift'ed off the stack.
 SWARM_NAME="$1"
 
-## Find an existing manager node for the requested swarm
-MANAGER_ID=$(${DIR}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
+## Find a manager node in the swarm and get the IP
+MANAGER_IP=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} --format PublicIPv4 --token ${DO_ACCESS_TOKEN}) || exit 1
 
 ## The following 3 commands will all be run on the remote docker manager:
 ## getStatus() will return the status of a single docker node (i.e. "Ready")
@@ -91,14 +91,19 @@ SSH_LOOP="export TIMER=0; while [[ \$(allReady \"$HOSTNAMES_TO_FIND\") != Ready 
 
 HOST_STATUS=""
 START_TIME=$SECONDS
-## Use a loop to retry the SSH connection if it fails
+
+# Use a loop to retry the SSH connection if it fails.
+# Common failures occur if the droplet isn't fully booted or SSH connections are throttled from too many attempts.
+
 while [[ "$HOST_STATUS" != "Ready" ]] && [[ $(( SECONDS - START_TIME )) -lt ${TIMEOUT} ]]; do
-    HOST_STATUS=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "${FUNCTION_GETSTATUS}; ${FUNCTION_ALL_READY}; ${SSH_LOOP};")
+    HOST_STATUS=$(${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} -c "${FUNCTION_GETSTATUS}; ${FUNCTION_ALL_READY}; ${SSH_LOOP};") 2>/dev/null
     if [[ $? -ne 0 ]]; then sleep 30; fi  ## Attempt to wait out an SSH rate-limit failure before retrying
 done
 
 if [[ ${HOST_STATUS} == "Ready" ]]; then
     printf "Nodes ${HOSTNAMES_TO_FIND} are all READY!\n\n"
+    exit 0
 else
-    printf "Some nodes still aren\'t ready. Polling has timed out.\n\n"
+    printf "Some nodes still aren\'t ready. Polling has timed out.\n\n" 1>&2
+    exit 1
 fi

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")"
+DIR="$(dirname "$(readlink -f "$0")")/.."
 
 ## Import config variables
-source ${DIR}/config.sh
+source ${DIR}/config/config.sh
 
 USAGE="\nScale a service within the swarm
 
@@ -71,4 +71,4 @@ SWARM_NAME="$1"
 
 
 ## Connect to the manager and scale the service
-${DIR}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker service scale ${SERVICE_NAME}=${REPLICAS_DESIRED_QTY}"
+${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker service scale ${SERVICE_NAME}=${REPLICAS_DESIRED_QTY}"
