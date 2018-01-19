@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")"
+
 ## Import config variables
-if [ ! -f "${BASH_SOURCE%/*}/config.sh" ]; then
+if [ ! -f "${DIR}/config.sh" ]; then
     printf "Config file not found - creating \'config.sh\' from the template.
     You should customize the contents of \'config.sh\' before using this script.\n"
-    $(cp ${BASH_SOURCE%/*}/config.example.sh ${BASH_SOURCE%/*}/config.sh && chmod a+x ${BASH_SOURCE%/*}/config.sh) || printf "\nUnable to create config file.\n" 1>&2 && exit 1
+    $(cp ${DIR}/config.example.sh ${DIR}/config.sh && chmod a+x ${DIR}/config.sh) || printf "\nUnable to create config file.\n" 1>&2 && exit 1
 fi
-source ${BASH_SOURCE%/*}/config.sh
+source ${DIR}/config.sh
 
 USAGE="\nCreate & manage a Docker swarm on DigitalOcean droplets
 
@@ -37,10 +40,10 @@ Where:
 Flags:
         --managers integer      The number of manager nodes to create.  Default 1.
         --workers integer       The number of worker nodes to create (Default 0) in addition to the single manager node.
-        --deploy-file string    The filename of a \'docker-compose.yml\' file that describes a service stack to deploy.
-                                 This argument must be accompanied by \'--deploy-name\'.
-        --deploy-name string    The name to give to the stack being deployed.
-                                 This argument must be accompanied by \'--deploy-file\'.
+    -c, --compose-file string   The filename of a \'docker-compose.yml\' file that describes a service stack to deploy.
+                                 This argument must be accompanied by \'--stack-name\'.
+    -n, --stack-name string    The name to give to the stack being deployed.
+                                 This argument must be accompanied by \'--compose-file\'.
     -t, --token                 Your DigitalOcean API key (optional).
                                  If omitted here, it must be provided in \'config.sh\'\n\n"
 
@@ -61,11 +64,11 @@ Flags:
 SCALE_STACK_USAGE="\nChange the number of replicas of the \'_web\' service in a stack.
 
 Usage:
-$(basename "$0") scale-stack <swarmName> --stack <stackName> --replicas <#> [flags]
+$(basename "$0") scale-stack <swarmName> --stack-name <stackName> --replicas <#> [flags]
 
 Where:
     <swarmName>     The name of the swarm that is hosting the stack to be scaled.
-    --stack         The name of the service stack to be scaled. Only the service named \'stackName-web\' will be scaled.
+    --stack-name    The name of the service stack to be scaled. Only the service named \'stack-name_web\' will be scaled.
     --replicas      The integer number of replicas of the web service that should exist on the swarm.
 
 Flags:
@@ -106,8 +109,8 @@ case "$SUBCOMMAND" in
         FLAGS=""
 
         ## Process flags and options
-        SHORTOPTS="t:"
-        LONGOPTS="token:,managers:,workers:,deploy-file:,deploy-name:"
+        SHORTOPTS="t:c:n:"
+        LONGOPTS="token:,managers:,workers:,compose-file:,stack-name:"
         ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
         eval set -- ${ARGS}
 
@@ -126,14 +129,14 @@ case "$SUBCOMMAND" in
                     shift
                     WORKERS_TO_ADD="$1"
                     ;;
-                --deploy-file)
+                -c | --compose-file)
                     shift
                     COMPOSE_FILE="$1"
                     if [ ! -f "$COMPOSE_FILE" ]; then
                         printf "\nThe file \'${COMPOSE_FILE}\' could not be found. You must provide a valid \'docker-compose.yml\' file." 1>&2; exit 1
                     fi
                     ;;
-                --deploy-name)
+                -n | --stack-name)
                     shift
                     STACK_NAME="$1"
                     ;;
@@ -171,22 +174,22 @@ case "$SUBCOMMAND" in
         MANAGER_NAME="${SWARM_NAME}-01"  # This assumption is generally safe and saves an API call. Replace with a lookup if it causes problems.
 
         ## Create the swarm
-        ${BASH_SOURCE%/*}/create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 1
+        ${DIR}/create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 1
 
         ## Wait for docker to initialize the swarm (so a swarm join token will be available) before adding workers
         printf "\nWaiting for swarm manager to initialize the swarm...\n"
-        ${BASH_SOURCE%/*}/poll-for-active-node.sh "$SWARM_NAME" --hostname "$SWARM_NAME-01"
+        ${DIR}/poll-for-active-node.sh "$SWARM_NAME" --hostname "$SWARM_NAME-01"
         printf "\n"
         if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
-            ${BASH_SOURCE%/*}/add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
+            ${DIR}/add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
         fi
 
         if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
-            ${BASH_SOURCE%/*}/add-manager.sh ${SWARM_NAME} --add ${MANAGERS_TO_ADD} --token ${DO_ACCESS_TOKEN} || exit 1
+            ${DIR}/add-manager.sh ${SWARM_NAME} --add ${MANAGERS_TO_ADD} --token ${DO_ACCESS_TOKEN} || exit 1
         fi
 
         if [[ -n ${COMPOSE_FILE} ]] && [[ -n ${STACK_NAME} ]]; then
-            ${BASH_SOURCE%/*}/deploy-stack.sh ${SWARM_NAME} --compose-file ${COMPOSE_FILE} --stack-name ${STACK_NAME} --token ${DO_ACCESS_TOKEN}
+            ${DIR}/deploy-stack.sh ${SWARM_NAME} --compose-file ${COMPOSE_FILE} --stack-name ${STACK_NAME} --token ${DO_ACCESS_TOKEN}
         fi
         ;;
 
@@ -248,11 +251,11 @@ case "$SUBCOMMAND" in
 
         if [[ ${WORKERS_DESIRED} -gt ${WORKER_NODES_COUNT} ]]; then
             printf "Adding ${WORKERS_TO_ADD} worker(s) to the ${SWARM_NAME} swarm\n"
-            ${BASH_SOURCE%/*}/add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --token "$DO_ACCESS_TOKEN" || exit 1
+            ${DIR}/add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --token "$DO_ACCESS_TOKEN" || exit 1
             exit 0
         elif [[ ${WORKERS_DESIRED} -lt ${WORKER_NODES_COUNT} ]]; then
             printf "Removing ${WORKERS_TO_REMOVE} worker(s) from the ${SWARM_NAME} swarm\n"
-            ${BASH_SOURCE%/*}/remove-worker.sh "$SWARM_NAME" --remove "$WORKERS_TO_REMOVE" --token "$DO_ACCESS_TOKEN" || exit 1
+            ${DIR}/remove-worker.sh "$SWARM_NAME" --remove "$WORKERS_TO_REMOVE" --token "$DO_ACCESS_TOKEN" || exit 1
             exit 0
         elif [[ ${WORKERS_DESIRED} -eq ${WORKER_NODES_COUNT} ]]; then
             printf "This swarm already has ${WORKERS_DESIRED} worker nodes.\n"
@@ -268,14 +271,14 @@ case "$SUBCOMMAND" in
         ## This command has no defaults
 
         ## Process flags and options
-        SHORTOPTS="t:"
-        LONGOPTS="token:,stack:,replicas:"
+        SHORTOPTS="t:n:"
+        LONGOPTS="token:,stack-name:,replicas:"
         ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
         eval set -- ${ARGS}
 
         while true; do
             case ${1} in
-                --stack)
+                -n | --stack-name)
                     shift
                     STACK_NAME="$1"
                     ;;
@@ -326,27 +329,27 @@ case "$SUBCOMMAND" in
 
         if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
             printf "Adding ${WORKERS_TO_ADD} worker(s) to the ${SWARM_NAME} swarm...\n"
-            ${BASH_SOURCE%/*}/add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --wait --token "$DO_ACCESS_TOKEN" || exit 1
+            ${DIR}/add-worker.sh "$SWARM_NAME" --add "$WORKERS_TO_ADD" --wait --token "$DO_ACCESS_TOKEN" || exit 1
         else
             printf "No new droplets are needed to achieve ${REPLICAS_DESIRED_QTY} replicas.\n"
         fi
 
         ## Scale the '_web' service for the specified stack
-        ${BASH_SOURCE%/*}/scale-service.sh ${SWARM_NAME} --service ${SERVICE_NAME} --replicas ${REPLICAS_DESIRED_QTY} --token ${DO_ACCESS_TOKEN} >/dev/null
+        ${DIR}/scale-service.sh ${SWARM_NAME} --service ${SERVICE_NAME} --replicas ${REPLICAS_DESIRED_QTY} --token ${DO_ACCESS_TOKEN} >/dev/null
 
         ## Output a summary of the services in the stack
-        ${BASH_SOURCE%/*}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack ps ${STACK_NAME}"
+        ${DIR}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack ps ${STACK_NAME}"
 
         ## TODO: Check for idle nodes and prune unused droplets. Use `docker node ps mySwarm-01 mySwarm-02 mySwarm...`
 
         ;;
 
     remove-stack)
-        ${BASH_SOURCE%/*}/remove-stack.sh "$@"
+        ${DIR}/remove-stack.sh "$@"
         ;;
 
     deploy)
-        ${BASH_SOURCE%/*}/deploy-stack.sh "$@"
+        ${DIR}/deploy-stack.sh "$@"
         ;;
 
     destroy)
@@ -391,6 +394,6 @@ case "$SUBCOMMAND" in
         SWARM_NAME="$1"; shift
 
         ## Destroy the swarm
-        ${BASH_SOURCE%/*}/destroy-swarm.sh ${SWARM_NAME} --token ${DO_ACCESS_TOKEN}${FLAGS} || exit 1
+        ${DIR}/destroy-swarm.sh ${SWARM_NAME} --token ${DO_ACCESS_TOKEN}${FLAGS} || exit 1
         ;;
 esac

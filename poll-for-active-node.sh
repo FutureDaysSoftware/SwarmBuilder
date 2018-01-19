@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")"
+
 ## Import config variables
-source ${BASH_SOURCE%/*}/config.sh
+source ${DIR}/config.sh
 
 USAGE="\nPoll a swarm manager until the specified node(s) becomes available.  If multiple hostnames are specified,
 the polling will continue until ALL of the nodes are ready.  The polling loop runs on the remote manager node to prevent
@@ -74,7 +77,7 @@ fi
 SWARM_NAME="$1"
 
 ## Find an existing manager node for the requested swarm
-MANAGER_ID=$(${BASH_SOURCE%/*}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
+MANAGER_ID=$(${DIR}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
 
 ## The following 3 commands will all be run on the remote docker manager:
 ## getStatus() will return the status of a single docker node (i.e. "Ready")

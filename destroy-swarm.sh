@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")"
+
 ## Import config variables
-source ${BASH_SOURCE%/*}/config.sh
+source ${DIR}/config.sh
 
 USAGE="\nDestroy ALL nodes in the specified Swarm
 

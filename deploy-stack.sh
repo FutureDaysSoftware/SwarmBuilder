@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")"
+
 ## Import config variables
-source ${BASH_SOURCE%/*}/config.sh
+source ${DIR}/config.sh
 
 USAGE="\nDeploy a service stack to the swarm
 
@@ -11,7 +14,7 @@ $(basename "$0") <exampleSwarmName> --compose-file [PATH] --stack-name [STACKNAM
 where:
     exampleSwarmName            The name of an existing swarm.
 
-    -f, --compose-file string   The path to a \'docker-compose.yml\' file that describes the stack to be deployed.
+    -c, --compose-file string   The path to a \'docker-compose.yml\' file that describes the stack to be deployed.
     -n, --stack-name string     The name to give to this stack in the swarm.
     -t, --token                 Your DigitalOcean API key (optional).
                                  If omitted here, it must be provided in \'config.sh\'\n\n"
@@ -27,7 +30,7 @@ eval set -- ${ARGS}
 
 while true; do
 	case ${1} in
-		-f | --compose-file)
+		-c | --compose-file)
             shift
 		    COMPOSE_FILE="$1"
 		    if [ ! -f "$COMPOSE_FILE" ]; then
@@ -70,4 +73,4 @@ fi
 SWARM_NAME="$1"
 
 ## Connect to the manager and deploy the stack. Pipe the 'docker-compose.yml' file into 'docker stack deploy' through STDIN
-cat "${COMPOSE_FILE}" | ${BASH_SOURCE%/*}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack deploy --compose-file - ${STACK_NAME} && docker stack ps ${STACK_NAME}"
+cat "${COMPOSE_FILE}" | ${DIR}/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack deploy --compose-file - ${STACK_NAME} && docker stack ps ${STACK_NAME}"

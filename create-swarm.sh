@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")"
+
 ## Import config variables
-source ${BASH_SOURCE%/*}/config.sh
+source ${DIR}/config.sh
 
 USAGE="Create a new swarm with a single manager node on DigitalOcean.
 
@@ -61,7 +64,7 @@ fi
 
 
 ## Create a script that will run on the new droplet as soon as it's booted up
-INIT_SCRIPT_FILENAME=$(${BASH_SOURCE%/*}/create-cloud-init-script.sh)
+INIT_SCRIPT_FILENAME=$(${DIR}/create-cloud-init-script.sh)
 
 
 ## Create the new droplet
@@ -73,6 +76,7 @@ doctl compute droplet create ${DROPLET_NAME} \
     --size ${DO_DROPLET_SIZE} \
     --ssh-keys ${DO_DROPLET_SSH_KEYS} \
     --tag-names "swarm,$SWARM_NAME,$SWARM_NAME-manager" \
+    --format ${DO_DROPLET_INFO_FORMAT} \
     --access-token ${DO_ACCESS_TOKEN} \
     --user-data-file ${INIT_SCRIPT_FILENAME} \
     ${DO_DROPLET_FLAGS}

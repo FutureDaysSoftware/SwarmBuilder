@@ -17,6 +17,11 @@ export DO_DROPLET_REGION="nyc3"
 ## i.e. "--enable-private-networking --enable-backups --enable-ipv6"
 export DO_DROPLET_FLAGS="--enable-private-networking"
 
+## DO_DROPLET_INFO_FORMAT is a comma-separated list of droplet properties that should be displayed when creating
+## or changing droplets.
+## Available options: ID,Name,PublicIPv4,PrivateIPv4,PublicIPv6,Memory,VCPUs,Disk,Region,Image,Status,Tags,Features,Volumes
+export DO_DROPLET_INFO_FORMAT="ID,Name,PublicIPv4,Memory,Region,Status,Tags"
+
 ##  DO_IP_DISCOVERY_URL is the URL of DigitalOcean's internal 'what's-my-ip' service.  This shouldn't need to be changed.
 export DO_IP_DISCOVERY_URL="http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address"
 

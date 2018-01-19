@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")"
+
 ## Import config variables
-source ${BASH_SOURCE%/*}/config.sh
+source ${DIR}/config.sh
 
 USAGE="\nExecute a command on a manager node.
 
@@ -79,7 +82,7 @@ fi
 
 ## Find a manager node to connect to
 if [[ -z "$MANAGER_ID" ]]; then
-    MANAGER_ID=$(${BASH_SOURCE%/*}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
+    MANAGER_ID=$(${DIR}/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
 fi
 
 ## Connect to the manager and run the command

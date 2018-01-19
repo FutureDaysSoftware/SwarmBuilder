@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")"
+
 ## Import config variables
-source ${BASH_SOURCE%/*}/config.sh
+source ${DIR}/config.sh
 
 USAGE="\nWrite a script that can be run by a droplet at boot-time to join an existing swarm.
 
@@ -16,7 +19,7 @@ The init-script can be run on a remote host to create a new swarm.\n\n"
 
 
 ## Set Defaults
-FOLDER="${BASH_SOURCE%/*}/cloud-init"
+FOLDER="${DIR}/cloud-init"
 FILENAME="bootstrap.sh"
 FILEPATH="${FOLDER}/${FILENAME}"
 
