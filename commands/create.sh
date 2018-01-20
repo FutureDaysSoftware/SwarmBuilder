@@ -20,8 +20,9 @@ Flags:
         --workers integer       The number of worker nodes to create (Default 0) in addition to the single manager node.
     -c, --compose-file string   The filename of a \'docker-compose.yml\' file that describes a service stack to deploy.
                                  This argument must be accompanied by \'--stack-name\'.
-    -n, --stack-name string    The name to give to the stack being deployed.
+    -n, --stack-name string     The name to give to the stack being deployed.
                                  This argument must be accompanied by \'--compose-file\'.
+    -b, --bare                  The swarm will be configured, but no webhosting environment (nginx, etc) will be deployed.
     -t, --token                 Your DigitalOcean API key (optional).
                                  If omitted here, it must be provided in \'config.sh\'\n\n"
 
@@ -30,10 +31,11 @@ Flags:
 MANAGERS_TO_ADD=0
 WORKERS_TO_ADD=0
 FLAGS=""
+DEPLOY_WEBHOST=true
 
 ## Process flags and options
-SHORTOPTS="t:c:n:"
-LONGOPTS="token:,managers:,workers:,compose-file:,stack-name:"
+SHORTOPTS="t:c:n:b"
+LONGOPTS="token:,managers:,workers:,compose-file:,stack-name:,bare"
 ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
 eval set -- ${ARGS}
 
@@ -47,10 +49,12 @@ while true; do
             elif [[ ${MANAGERS_TO_ADD} -lt 0 ]]; then
                 printf "\nYou must have at least 1 manager in the swarm\n\n" 1>&2; exit 1;
             fi
+            shift
             ;;
         --workers)
             shift
             WORKERS_TO_ADD="$1"
+            shift
             ;;
         -c | --compose-file)
             shift
@@ -58,14 +62,21 @@ while true; do
             if [ ! -f "$COMPOSE_FILE" ]; then
                 printf "\nThe file \'${COMPOSE_FILE}\' could not be found. You must provide a valid \'docker-compose.yml\' file." 1>&2; exit 1
             fi
+            shift
             ;;
         -n | --stack-name)
             shift
             STACK_NAME="$1"
+            shift
+            ;;
+        -b | --bare)
+            DEPLOY_WEBHOST=false
+            shift
             ;;
         -t | --token )
             shift
             DO_ACCESS_TOKEN="$1"
+            shift
             ;;
         -- )
             shift
@@ -76,7 +87,6 @@ while true; do
             break
             ;;
     esac
-    shift;
 done
 
 if [[ $# -eq 0 ]]; then
@@ -100,7 +110,7 @@ ${DIR}/helpers/create-swarm.sh "$SWARM_NAME" --token "$DO_ACCESS_TOKEN" || exit 
 
 ## Wait for docker to initialize the swarm (so a swarm join token will be available) before adding workers
 printf "\nWaiting for swarm manager to initialize the swarm...\n"
-${DIR}/helpers/poll-for-active-node.sh "$SWARM_NAME" --hostname "$SWARM_NAME-01"
+${DIR}/helpers/poll-for-active-node.sh "$SWARM_NAME" --hostname "$MANAGER_NAME"
 if [[ "$?" != 0 ]]; then
     printf "Attempting to continue. If a swarm join-token can\'t be retrieved from the
 manager node yet, you\'ll need to wait a little longer until the docker swarm finishes initializing the swarm.\n"
@@ -114,7 +124,14 @@ manager node yet, you\'ll need to wait a little longer until the docker swarm fi
     fi
 fi
 
-printf "\n"
+
+if [[ "${DEPLOY_WEBHOST}" == true ]]; then
+    ## Set up the webhosting environment on the master swarm node
+    printf "\nDeploying nginx to the manager node.\n"
+    ${DIR}/helpers/deploy-webhosting-containers.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN}
+    # TODO: Allow webhost deployment to run asynchronously with the 'add-worker' command next (but wait before adding managers or deploying app stack)
+fi
+
 if [[ ${WORKERS_TO_ADD} -gt 0 ]]; then
     ${DIR}/helpers/add-worker.sh ${SWARM_NAME} --add ${WORKERS_TO_ADD} --token ${DO_ACCESS_TOKEN}${FLAGS}
 fi
@@ -124,5 +141,5 @@ if [[ ${MANAGERS_TO_ADD} -gt 0 ]]; then
 fi
 
 if [[ -n ${COMPOSE_FILE} ]] && [[ -n ${STACK_NAME} ]]; then
-    ${DIR}/helpers/deploy-stack.sh ${SWARM_NAME} --compose-file ${COMPOSE_FILE} --stack-name ${STACK_NAME} --token ${DO_ACCESS_TOKEN}
+    ${DIR}/commands/deploy.sh ${SWARM_NAME} --compose-file ${COMPOSE_FILE} --stack-name ${STACK_NAME} --token ${DO_ACCESS_TOKEN}
 fi

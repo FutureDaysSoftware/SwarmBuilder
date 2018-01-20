@@ -23,7 +23,7 @@ where:
 ## This command has no defaults
 
 ## Process flags and options
-SHORTOPTS="f:n:t:"
+SHORTOPTS="c:n:t:"
 LONGOPTS="compose-file:,stack-name:,token:"
 ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} -- "$@" )
 eval set -- ${ARGS}

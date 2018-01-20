@@ -96,7 +96,7 @@ START_TIME=$SECONDS
 # Common failures occur if the droplet isn't fully booted or SSH connections are throttled from too many attempts.
 
 while [[ "$HOST_STATUS" != "Ready" ]] && [[ $(( SECONDS - START_TIME )) -lt ${TIMEOUT} ]]; do
-    HOST_STATUS=$(${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} -c "${FUNCTION_GETSTATUS}; ${FUNCTION_ALL_READY}; ${SSH_LOOP};") 2>/dev/null
+    HOST_STATUS=$(${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} -c "${FUNCTION_GETSTATUS}; ${FUNCTION_ALL_READY}; ${SSH_LOOP} 2>/dev/null;") 2>/dev/null
     if [[ $? -ne 0 ]]; then sleep 30; fi  ## Attempt to wait out an SSH rate-limit failure before retrying
 done
 
