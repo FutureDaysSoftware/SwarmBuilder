@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ## Set root path
-DIR="$(dirname "$(readlink -f "$0")")/.."
+DIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
 
 ## Import config variables
 source ${DIR}/config/config.sh
@@ -18,8 +18,10 @@ where:
                          If omitted here, it must be provided in \'config.sh\'\n\n"
 
 ## Set defaults
-COMPOSE_FILE="${DIR}/containers/nginx-compose.yml"
-STACK_NAME="nginx"
+COMPOSE_FILE="${DIR}/containers/traefik-compose.yml"
+CONFIG_FILE="${DIR}/containers/traefik.toml"
+STACK_NAME="traefik"
+OVERLAY_NETWORK_NAME="http-proxy"
 
 
 ## Process flags and options
@@ -60,16 +62,27 @@ elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     exit 1
 fi
 
+
 ## Assume the name of the master swarm node - by convention, it's "SWARM_NAME-01"
 MANAGER_NAME="${SWARM_NAME}-01"
+MANAGER_IP=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} -f "PublicIPv4" --token ${DO_ACCESS_TOKEN})
 
-## Construct the command that will run on the remote host.
-##  We need to create the 'attachable' overlay network "nginx-proxy" that all the web apps on the swarm
-##  will use to communicate with nginx-proxy.
-##  Then deploy the "nginx" stack.
-CREATE_NETWORK_COMMAND="docker network create --driver=overlay --attachable nginx-proxy"
-DEPLOY_STACK_COMMAND="docker stack deploy --compose-file - ${STACK_NAME} && docker ps"
-COMPOSE_UP_COMMAND="docker-compose -f - up && docker ps"
+## Construct the commands that will run on the remote host.
+##  1.  We need to create the 'attachable' overlay network that all the web apps on the swarm
+##      will use to communicate with the reverse-proxy.
+##  2.  Send the Traefik config (.toml) file and create 'acme.json' for storing LetsEncrypt keys.
+##  3.  Write the ACME_DO_ACCESS_TOKEN to an env file on the remote host. It will be used in 'traefik-compose.yml'
+##      and is necessary for LetsEncrypt to perform DNS verification while issuing SSL certificates.
+##  4.  Deploy the reverse-proxy application stack (traefik)
+CREATE_NETWORK_COMMAND="docker network create --driver=overlay --attachable ${OVERLAY_NETWORK_NAME}"
+SEND_FILE_COMMAND="cat > $(basename ${CONFIG_FILE}) \
+&& touch acme.json \
+&& chmod 600 acme.json"
+CREATE_DOCKER_ENV_COMMAND="cat > .env"
+DEPLOY_STACK_COMMAND="docker stack deploy --compose-file - ${STACK_NAME} && sleep 2 && docker ps"
 
-${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "${CREATE_NETWORK_COMMAND}"
-cat "${COMPOSE_FILE}" | ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "${DEPLOY_STACK_COMMAND}"
+
+${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${CREATE_NETWORK_COMMAND}"
+cat "${CONFIG_FILE}" | ${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${SEND_FILE_COMMAND}"
+echo "DO_AUTH_TOKEN=${ACME_DO_ACCESS_TOKEN}" | ${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${CREATE_DOCKER_ENV_COMMAND}"
+cat "${COMPOSE_FILE}" | ${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${DEPLOY_STACK_COMMAND}"

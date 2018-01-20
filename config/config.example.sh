@@ -3,6 +3,11 @@
 ## Digital Ocean Access Token / API key (if omitted here, it can be provided on the command line)
 export DO_ACCESS_TOKEN=""
 
+## Digital Ocean Access Token used by CertBot for DNS host verification when requesting SSL Certificates
+## This access token will be given to certbot, so you probably shouldn't use your personal token.
+## This also allows you to use a separate DO account for Droplets and DNS.
+export ACME_DO_ACCESS_TOKEN=""
+
 ## ----------------------------------------------
 ## Digital Ocean droplet configuration
 
