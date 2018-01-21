@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")/.."
+
 ## Import config variables
-source ./config.sh
+source ${DIR}/config/config.sh
 
 USAGE="Create a new swarm with a single manager node on DigitalOcean.
 
@@ -61,23 +64,11 @@ fi
 
 
 ## Create a script that will run on the new droplet as soon as it's booted up
-if [[ ! -d "cloud-init" ]]; then
-	mkdir cloud-init
-fi
-
-INIT_SCRIPT="#!/bin/bash
-ufw allow 2377/tcp
-ufw allow 7946
-ufw allow 4789
-export PUBLIC_IPV4=\$(curl -s ${DO_IP_DISCOVERY_URL})
-docker swarm init --advertise-addr \"\${PUBLIC_IPV4}:2377\""
-
-echo "$INIT_SCRIPT" > cloud-init/bootstrap.sh
-chmod a+x cloud-init/*.sh
+INIT_SCRIPT_FILENAME=$(${DIR}/helpers/create-cloud-init-script.sh)
 
 
 ## Create the new droplet
-printf "\n Creating droplet \"${DROPLET_NAME}\" as a new swarm manager - this could take a minute...\n\n"
+printf "\nCreating droplet \"${DROPLET_NAME}\" as a new swarm manager - this could take a minute...\n\n"
 doctl compute droplet create ${DROPLET_NAME} \
     --wait \
     --image ${DO_DROPLET_IMAGE} \
@@ -85,7 +76,14 @@ doctl compute droplet create ${DROPLET_NAME} \
     --size ${DO_DROPLET_SIZE} \
     --ssh-keys ${DO_DROPLET_SSH_KEYS} \
     --tag-names "swarm,$SWARM_NAME,$SWARM_NAME-manager" \
+    --format ${DO_DROPLET_INFO_FORMAT} \
     --access-token ${DO_ACCESS_TOKEN} \
-    --user-data-file ./cloud-init/bootstrap.sh \
+    --user-data-file ${INIT_SCRIPT_FILENAME} \
     ${DO_DROPLET_FLAGS}
 
+## Assign a floating IP to the new manager node, if provided in config.sh
+if [[ -n ${FLOATING_IP} ]]; then
+    printf "Assigning floating IP ${FLOATING_IP} to swarm master \'${DROPLET_NAME}\'"
+    MASTER_NODE_ID=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN})
+    doctl compute floating-ip-action assign ${FLOATING_IP} ${MASTER_NODE_ID} -t ${DO_ACCESS_TOKEN}
+fi

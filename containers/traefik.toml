@@ -1,0 +1,94 @@
+##################################
+## traefik configuration file
+##################################
+
+debug = false
+checkNewVersion = true
+logLevel = "ERROR"
+
+defaultEntryPoints = ["http", "https"]
+
+[entryPoints]
+
+  [entryPoints.http]
+  address = ":80"
+#    [entryPoints.http.redirect]
+#    entryPoint = "https"
+  [entryPoints.https]
+  address = ":443"
+  [entryPoints.https.tls]
+
+#[retry]
+
+# Enable Docker configuration backend.
+[docker]
+
+# Docker server endpoint.
+# Can be a tcp or a unix socket endpoint.
+#
+# Required
+# Default: "unix:///var/run/docker.sock"
+# endpoint = "tcp://127.0.0.1:2375"
+endpoint = "unix:///var/run/docker.sock"
+
+# Default domain used.
+# Can be overridden by setting the "traefik.domain" label on a services.
+#
+# Optional
+# Default: ""
+#
+# domain = "example.com"
+
+# Enable watch docker changes.
+#
+# Optional
+# Default: true
+#
+watch = true
+
+# Use Docker Swarm Mode as data provider.
+#
+# Optional
+# Default: false
+#
+swarmmode = true
+
+# Override default configuration template.
+# For advanced users :)
+#
+# Optional
+#
+# filename = "docker.tmpl"
+
+# Expose services by default in Traefik.
+#
+# Optional
+# Default: true
+#
+exposedbydefault = false
+
+# Enable docker TLS connection.
+#
+# Optional
+#
+#  [docker.tls]
+#  ca = "/etc/ssl/ca.crt"
+#  cert = "/etc/ssl/docker.crt"
+#  key = "/etc/ssl/docker.key"
+#  insecureskipverify = true
+
+[acme]
+# LetsEncrypt requires a valid email address to issue certificates.  Enter it here.
+email = "youremail@example.com"
+
+# Uncomment the 'caServer =' line to use the LetsEncrypt staging server (for generating test certificates)
+# caServer = "https://acme-staging.api.letsencrypt.org/directory"
+
+# For DNS validation to work through DigitalOcean, your site must use the Digital Ocean nameservers and you must
+# provide a Digital Ocean API key for LetsEncrpy to use in the `config/config.sh` file (`ACME_DO_ACCESS_TOKEN`).
+dnsProvider = "digitalocean"
+
+# The certificate storage file is created by swarmbuilder in the `deploy-webhosting-containers.sh` script.
+storage = "/etc/traefik/acme.json"
+entryPoint = "https"
+OnHostRule = true

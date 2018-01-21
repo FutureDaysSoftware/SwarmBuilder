@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+## Set root path
+DIR="$(dirname "$(readlink -f "$0")")/.."
+
 ## Import config variables
-source ./config.sh
+source ${DIR}/config/config.sh
 
 USAGE="\nAdd worker nodes to an existing swarm.
 
@@ -70,60 +73,33 @@ fi
 SWARM_NAME="$1"
 
 
-## Find a manager node for the requested swarm
-MANAGER_NODE_STRING=$(doctl compute droplet list \
-    --tag-name ${SWARM_NAME}-manager \
-    --format Name,ID,PublicIPv4 \
-    --no-header \
-    --access-token ${DO_ACCESS_TOKEN} | head -n1)
-
-## Get the swarm join-token from the manager node
-if [ -z "$MANAGER_NODE_STRING" ]; then
-    printf "No manager node found for the \"${SWARM_NAME}\" swarm. Does the swarm exist yet?\n\n" 1>&2
+## Get the join-token for the swarm
+JOIN_TOKEN=$(${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
+if [[ "$?" != 0 ]] || [[ -z "${JOIN_TOKEN}" ]]; then
+    printf "Couldn't get the swarm join-token from manager node. Unable to add workers to the swarm.\n\n" 1>&2
     exit 1
-else
-
-    MANAGER_NODE_ARRAY=(${MANAGER_NODE_STRING})
-    MANAGER_NAME=${MANAGER_NODE_ARRAY[0]}
-    MANAGER_ID=${MANAGER_NODE_ARRAY[1]}
-    MANAGER_IP=${MANAGER_NODE_ARRAY[2]}
-
-	JOIN_TOKEN=$(doctl compute ssh ${MANAGER_ID} --access-token ${DO_ACCESS_TOKEN} --ssh-command "docker swarm join-token -q worker")
-	if [ -z "$JOIN_TOKEN" ]; then
-		printf "Couldn't get swarm token from manager node \"${MANAGER_NAME}\"\n\n" 1>&2
-		exit 1
-	fi
 fi
 
+## Get the IP address of the manager node (needed for the `swarm join` command)
+MANAGER_IP=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} --format PublicIPv4 --token ${DO_ACCESS_TOKEN}) || exit 1
 
 ## Find the next sequential node number to start naming the new worker droplets
 ## Method:
 #   -Get a list of all droplets in the requested swarm
-#   -Sort alphanumerically
-#   -Take the LAST item
-#   -Split the droplet's name on the '-' character and return the substring on the right
+#   -Sort alphanumerically ( |sort )
+#   -Take the LAST item ( |tail -n1 )
+#   -Split the droplet's name on the '-' character and return the substring on the right ( |cut -d'-' -f2- )
 LAST_INDEX_IN_SWARM=$(doctl compute droplet list \
     --tag-name ${SWARM_NAME} \
     --format Name \
     --no-header \
-    --access-token ${DO_ACCESS_TOKEN} | sort | tail -n1 | cut -d'-' -f 2)
+    --access-token ${DO_ACCESS_TOKEN} | sort | tail -n1 | cut -d'-' -f2-)
 
 NEXT_INDEX_IN_SWARM=$((${LAST_INDEX_IN_SWARM} + 1))
 
 
 ## Write the cloud-init script for the new worker node(s)
-SCRIPT_JOIN="#!/bin/bash
-ufw allow 2377/tcp
-ufw allow 7946
-ufw allow 4789
-export PUBLIC_IPV4=\$(curl -s ${DO_IP_DISCOVERY_URL})
-docker swarm join --advertise-addr \"\${PUBLIC_IPV4}:2377\" --token \"$JOIN_TOKEN\" \"$MANAGER_IP:2377\""
-
-if [ ! -d "cloud-init" ]; then
-	mkdir cloud-init
-fi
-echo "$SCRIPT_JOIN" > cloud-init/bootstrap.sh
-chmod a+x cloud-init/bootstrap.sh
+JOIN_SCRIPT_FILENAME=$(${DIR}/helpers/create-cloud-init-script.sh ${JOIN_TOKEN} ${MANAGER_IP})
 
 ## Create the new worker node(s)
 DROPLET_NAMES=""
@@ -144,19 +120,20 @@ doctl compute droplet create ${DROPLET_NAMES} \
 --size ${DO_DROPLET_SIZE} \
 --ssh-keys ${DO_DROPLET_SSH_KEYS} \
 --tag-names "swarm,$SWARM_NAME,$SWARM_NAME-worker" \
+--format ${DO_DROPLET_INFO_FORMAT} \
 --access-token ${DO_ACCESS_TOKEN} \
---user-data-file ./cloud-init/bootstrap.sh \
+--user-data-file ${JOIN_SCRIPT_FILENAME} \
 ${DO_DROPLET_FLAGS}
 
 if [[ $? -ne 0 ]]; then
-    printf "\nError while creating worker nodes. Exiting.\n\n" 1>&2
+    printf "\nError while creating worker droplets. Exiting.\n\n" 1>&2
     exit 1
 fi
 
 if [[ ${POLL_NEW_NODES_UNTIL_READY} ]]; then
     printf "Waiting for new workers to join the swarm...\n"
 
-    POLLING_COMMAND="./poll-for-active-node.sh ${SWARM_NAME}"
+    POLLING_COMMAND="${DIR}/helpers/poll-for-active-node.sh ${SWARM_NAME}"
 
     ## Send the hostname to the polling script of every new worker node that was just created
     for NODE in $(echo "$DROPLET_NAMES" | cut -d' ' -f1-); do

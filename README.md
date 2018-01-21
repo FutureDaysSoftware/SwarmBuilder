@@ -2,6 +2,9 @@
 A set of Bash scripts to build a web hosting environment using Docker Swarm.
 
 ## Configuration
+
+**The config file**
+
 The `config.example.sh` script is a template for the config file that this script requires.
 A file named `config.sh` must exist before the scripts will run properly.  If the config file doesn't
 exist, it will be created when the `swarmbuilder.sh` script is run by making a copy of the
@@ -17,16 +20,60 @@ If a DigitalOcean API key is set in your `config.sh` file and you also provide o
 command line (with the `--token` argument), the one given on the command line will be used instead
 of the one in your config file.
 
+**LetsEncrypt**
+
+The only configuration needed to get LetsEncrypt up and running is to update your email address in 
+the `containers/traefik.toml` file under the `[acme]` section heading. Then, certificates will
+automatically be requested when a new **stack** is deployed that includes the necessary traefik labels
+in its `docker-compose.yml` file.  For example:
+
+    # docker-compose.yml for a website that will be included in traefik's reverse-proxy
+    version: '3'
+    
+    services:
+      web:
+        image: futuredays/alleganwizard
+        build: .
+        depends_on:
+          - postgres
+        deploy:
+            replicas: 1
+            labels:
+                - "traefik.enable=true"
+                - "traefik.backend=web"
+                - "traefik.frontend.rule=Host:mydomain.com"
+                - "traefik.port=80"
+                - "traefik.docker.network=http-proxy"
+    networks:
+      default:
+        external:
+          name: http-proxy
+
+**Adding swarmbuilder to your path**
+
+An install-script is included that will symlink the swarmbuilder.sh script into your `~/bin/` folder
+and ensure that the folder is in your path.
+
+    $ cd swarmbuilder
+    $ ./install-link.sh
+
+Once this is done, you can run the swarmbuilder script from inside any folder without providing the path.
+Also, the `.sh` file extension is omitted when using the symlinked command.
+
 ## Usage
 
 ### Creating a New Swarm
-To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampleSwarmName-1`, `exampleSwarmName-2`, and `exampleSwarmName-3` that will be publicly accessible at https://mydomain.com.  The application Stack defined by `./docker-compose.yml` will then be deployed to the Swarm:
+To create a swarm with 3 nodes (1 manager & 2 workers) on droplets named `exampleSwarmName-1`, 
+`exampleSwarmName-2`, and `exampleSwarmName-3` that will be publicly accessible at https://mydomain.com.  
+The application Stack defined by `docker-compose.yml` will then be deployed to the Swarm and will be named
+`webApp`:
 	
     $ swarmbuilder.sh create exampleSwarmName \
         --domain mydomain.com \
         --workers 2 \
         --tls \
-        --deploy ./docker-compose.yml
+        --compose-file ./docker-compose.yml \
+        --stack-name webApp
         
 ### Changing the number of workers in the swarm
 Add or remove worker nodes from the swarm.
@@ -42,12 +89,24 @@ When increasing the number of replicas, additional worker nodes will be created 
 any one node from running more than 1 replica of the same service.
 Nodes will not be deleted when decreasing the number of replicas.
 
-    $ swarmbuilder.sh scale-stack exampleSwarmName --stack webApp --replicas 3
+    $ swarmbuilder.sh scale-stack exampleSwarmName --stack-name webApp --replicas 3
     
-### Updating application code in the swarm
-When the application code has been updated, a new docker image must be built and pushed to the Docker registry before the swarm can be updated.  Once the image is available through the registry, updating the swarm can be done like this:
+### Removing a service stack
+To completely remove a service stack from the swarm, use:
 
-    $ swarmbuilder.sh update exampleSwarmName --deploy ./docker-compose.yml
+    $ swarmbuilder.sh remove-stack exampleSwarmName --stack-name webApp
+
+There is an optional `--force` flag that can be used to bypass the interactive confirmation.
+
+### Deploying & updating application code in the swarm
+Deploying a new stack to the swarm uses the same command as updating the code on an existing stack.
+When the application code has been updated, a new docker image must be built and pushed to the 
+Docker registry before the swarm can be updated.  Once the image is available through the registry,
+ updating the swarm can be done like this:
+
+    $ swarmbuilder.sh deploy exampleSwarmName \
+        --compose-file ./docker-compose.yml \
+        --stack-name webApp
 
 *Note: this requires that the naming conventions for services in the `docker-compose.yml` file be followed.*
 Behind the scenes, SwarmBuilder will look on the swarm named `exampleSwarmName` for a stack of services that is also named `exampleSwarmName` and update the stack with the provided `docker-compose.yml` file.

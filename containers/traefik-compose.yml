@@ -1,0 +1,26 @@
+version: "3"
+
+services:
+  http-proxy:
+    image: traefik
+    command: --web --docker --docker.swarmmode --docker.watch --logLevel=DEBUG
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - /root/traefik.toml:/etc/traefik/traefik.toml
+          - /root/acme.json:/etc/traefik/acme.json
+    deploy:
+        replicas: 1
+        placement:
+            constraints: [node.role == manager]
+    env_file:
+      - /root/.env
+
+networks:
+  default:
+    external:
+      name: http-proxy
+
