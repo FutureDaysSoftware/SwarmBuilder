@@ -81,3 +81,9 @@ doctl compute droplet create ${DROPLET_NAME} \
     --user-data-file ${INIT_SCRIPT_FILENAME} \
     ${DO_DROPLET_FLAGS}
 
+## Assign a floating IP to the new manager node, if provided in config.sh
+if [[ -n ${FLOATING_IP} ]]; then
+    printf "Assigning floating IP ${FLOATING_IP} to swarm master \'${DROPLET_NAME}\'"
+    MASTER_NODE_ID=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN})
+    doctl compute floating-ip-action assign ${FLOATING_IP} ${MASTER_NODE_ID} -t ${DO_ACCESS_TOKEN}
+fi

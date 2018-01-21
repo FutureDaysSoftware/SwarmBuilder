@@ -62,9 +62,6 @@ fi
 ## Note: options & flags have been 'shift'ed off the stack.
 SWARM_NAME="$1"
 
-## Find a manager node for the requested swarm
-MANAGER_ID=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} --format ID --token ${DO_ACCESS_TOKEN}) || exit 1
-
 ## Get a list of all worker nodes in the requested swarm, sorted in reverse alphanumerical order
 WORKER_NODES_STRING=$(doctl compute droplet list \
     --tag-name ${SWARM_NAME}-worker \
@@ -92,7 +89,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
     printf "Draining tasks from node \"${NODE_NAME}\"..."
-    ${DIR}/helpers/ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
+    ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node update --availability drain ${NODE_NAME}"
 	printf "done\n"
 done
 printf "\n"
@@ -106,7 +103,7 @@ do
     NODE_ID=${WORKER_NODE[1]}
 
 	printf "Removing ${NODE_NAME} from the swarm..."
-    ${DIR}/helpers/ssh-to-manager.sh --manager-id ${MANAGER_ID} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
+    ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker node rm ${NODE_NAME} -f"
 	printf "done\n"
 done
 printf "\n"

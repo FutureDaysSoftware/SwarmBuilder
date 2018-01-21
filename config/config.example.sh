@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 
-## Digital Ocean Access Token / API key (if omitted here, it can be provided on the command line)
+## Digital Ocean Access Token for managing droplets (if omitted here, it can be provided on the command line)
 export DO_ACCESS_TOKEN=""
 
 ## Digital Ocean Access Token used by CertBot for DNS host verification when requesting SSL Certificates
 ## This access token will be given to certbot, so you probably shouldn't use your personal token.
 ## This also allows you to use a separate DO account for Droplets and DNS.
 export ACME_DO_ACCESS_TOKEN=""
+
+## Assign the following floating IP to the master node of any swarm that's created. This allows swarms to be destroyed
+## and then created again on new droplets without breaking DNS. The IP specified here must already exist in your DO account.
+export FLOATING_IP=""
 
 ## ----------------------------------------------
 ## Digital Ocean droplet configuration

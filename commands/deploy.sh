@@ -20,7 +20,6 @@ where:
                                  If omitted here, it must be provided in \'config.sh\'\n\n"
 
 ## Set default options
-## This command has no defaults
 
 ## Process flags and options
 SHORTOPTS="c:n:t:"
@@ -71,6 +70,16 @@ fi
 ## Grab command-line parameters
 ## Note: options & flags have been 'shift'ed off the stack.
 SWARM_NAME="$1"
+DATA_MOUNT_FOLDER=/root/site-data/${STACK_NAME}
+
+## Build the SSH command to send to the swarm manager for deploying this service stack.
+## By convention, an empty folder will be created on the manager in case the stack needs to mount a volume for data persistence.
+MKDIR_COMMAND="mkdir --parents ${DATA_MOUNT_FOLDER}";
+DEPLOY_COMMAND="docker stack deploy --compose-file - ${STACK_NAME} && sleep 2 && docker stack ps ${STACK_NAME}"
+
+# TODO: Ensure that the data mount folder is created on the same manager node that the database service is running on
+## Ensure that the data mount folder for this stack exists on the manager node: \'$\'
+${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "${MKDIR_COMMAND}"
 
 ## Connect to the manager and deploy the stack. Pipe the 'docker-compose.yml' file into 'docker stack deploy' through STDIN
-cat "${COMPOSE_FILE}" | ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "docker stack deploy --compose-file - ${STACK_NAME} && docker stack ps ${STACK_NAME}"
+cat ${COMPOSE_FILE} | ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN} --ssh-command "${DEPLOY_COMMAND}"

@@ -62,11 +62,6 @@ elif [[ -z ${DO_ACCESS_TOKEN} ]]; then
     exit 1
 fi
 
-
-## Assume the name of the master swarm node - by convention, it's "SWARM_NAME-01"
-MANAGER_NAME="${SWARM_NAME}-01"
-MANAGER_IP=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} -f "PublicIPv4" --token ${DO_ACCESS_TOKEN})
-
 ## Construct the commands that will run on the remote host.
 ##  1.  We need to create the 'attachable' overlay network that all the web apps on the swarm
 ##      will use to communicate with the reverse-proxy.
@@ -74,15 +69,19 @@ MANAGER_IP=$(${DIR}/helpers/get-manager-info.sh ${SWARM_NAME} -f "PublicIPv4" --
 ##  3.  Write the ACME_DO_ACCESS_TOKEN to an env file on the remote host. It will be used in 'traefik-compose.yml'
 ##      and is necessary for LetsEncrypt to perform DNS verification while issuing SSL certificates.
 ##  4.  Deploy the reverse-proxy application stack (traefik)
-CREATE_NETWORK_COMMAND="docker network create --driver=overlay --attachable ${OVERLAY_NETWORK_NAME}"
-SEND_FILE_COMMAND="cat > $(basename ${CONFIG_FILE}) \
-&& touch acme.json \
-&& chmod 600 acme.json"
-CREATE_DOCKER_ENV_COMMAND="cat > .env"
-DEPLOY_STACK_COMMAND="docker stack deploy --compose-file - ${STACK_NAME} && sleep 2 && docker ps"
+SSH_COMMAND="docker network create --driver=overlay --attachable ${OVERLAY_NETWORK_NAME}; \
+touch acme.json \
+&& chmod 600 acme.json \
+&& echo \"DO_AUTH_TOKEN=${ACME_DO_ACCESS_TOKEN}\" > .env;"
 
+printf "Creating \'${OVERLAY_NETWORK_NAME}\' overlay network...
+Creating \'acme.json\' to store SSL certificates...
+Storing DigitalOcean Auth Token in a Docker .env (for LetsEncrypt to perform DNS verification)...\n"
+${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --master --ssh-command "${SSH_COMMAND}"
 
-${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${CREATE_NETWORK_COMMAND}"
-cat "${CONFIG_FILE}" | ${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${SEND_FILE_COMMAND}"
-echo "DO_AUTH_TOKEN=${ACME_DO_ACCESS_TOKEN}" | ${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${CREATE_DOCKER_ENV_COMMAND}"
-cat "${COMPOSE_FILE}" | ${DIR}/helpers/ssh-to-manager.sh --ip ${MANAGER_IP} --ssh-command "${DEPLOY_STACK_COMMAND}"
+printf "\nSending traefik config file \'${CONFIG_FILE}\'...\n"
+cat ${CONFIG_FILE} | ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --master --ssh-command "cat > $(basename ${CONFIG_FILE})"
+
+printf "\nSending docker compose file for the http proxy stack...\n"
+cat ${COMPOSE_FILE} | ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --master --ssh-command "docker stack deploy --compose-file - ${STACK_NAME} && sleep 2 && docker ps"
+

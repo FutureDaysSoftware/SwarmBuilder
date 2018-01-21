@@ -12,8 +12,8 @@ defaultEntryPoints = ["http", "https"]
 
   [entryPoints.http]
   address = ":80"
-    [entryPoints.http.redirect]
-    entryPoint = "https"
+#    [entryPoints.http.redirect]
+#    entryPoint = "https"
   [entryPoints.https]
   address = ":443"
   [entryPoints.https.tls]
@@ -78,9 +78,17 @@ exposedbydefault = false
 #  insecureskipverify = true
 
 [acme]
-#caServer = "https://acme-staging.api.letsencrypt.org/directory"
+# LetsEncrypt requires a valid email address to issue certificates.  Enter it here.
+email = "youremail@example.com"
+
+# Uncomment the 'caServer =' line to use the LetsEncrypt staging server (for generating test certificates)
+# caServer = "https://acme-staging.api.letsencrypt.org/directory"
+
+# For DNS validation to work through DigitalOcean, your site must use the Digital Ocean nameservers and you must
+# provide a Digital Ocean API key for LetsEncrpy to use in the `config/config.sh` file (`ACME_DO_ACCESS_TOKEN`).
 dnsProvider = "digitalocean"
-email = "evanhsu@gmail.com"
+
+# The certificate storage file is created by swarmbuilder in the `deploy-webhosting-containers.sh` script.
 storage = "/etc/traefik/acme.json"
 entryPoint = "https"
 OnHostRule = true

@@ -125,10 +125,18 @@ manager node yet, you\'ll need to wait a little longer until the docker swarm fi
 fi
 
 
-if [[ "${DEPLOY_WEBHOST}" == true ]]; then
+if [[ "${DEPLOY_WEBHOST}" = true ]]; then
     ## Set up the webhosting environment on the master swarm node
-    printf "\nDeploying nginx to the manager node.\n"
+    printf "\nDeploying hosting environment to the master node.\n"
+
+    ## Disable SSH rate-limiting on the remote host
+    ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --master --ssh-command "ufw allow ssh"
+
     ${DIR}/helpers/deploy-webhosting-containers.sh --swarm ${SWARM_NAME} --token ${DO_ACCESS_TOKEN}
+
+    ## Re-enable SSH rate-limiting on the remote host
+    ${DIR}/helpers/ssh-to-manager.sh --swarm ${SWARM_NAME} --master --ssh-command "ufw limit ssh"
+
     # TODO: Allow webhost deployment to run asynchronously with the 'add-worker' command next (but wait before adding managers or deploying app stack)
 fi
 
