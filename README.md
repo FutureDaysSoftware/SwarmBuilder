@@ -20,6 +20,35 @@ If a DigitalOcean API key is set in your `config.sh` file and you also provide o
 command line (with the `--token` argument), the one given on the command line will be used instead
 of the one in your config file.
 
+**LetsEncrypt**
+
+The only configuration needed to get LetsEncrypt up and running is to update your email address in 
+the `containers/traefik.toml` file under the `[acme]` section heading. Then, certificates will
+automatically be requested when a new **stack** is deployed that includes the necessary traefik labels
+in its `docker-compose.yml` file.  For example:
+
+    # docker-compose.yml for a website that will be included in traefik's reverse-proxy
+    version: '3'
+    
+    services:
+      web:
+        image: futuredays/alleganwizard
+        build: .
+        depends_on:
+          - postgres
+        deploy:
+            replicas: 1
+            labels:
+                - "traefik.enable=true"
+                - "traefik.backend=web"
+                - "traefik.frontend.rule=Host:mydomain.com"
+                - "traefik.port=80"
+                - "traefik.docker.network=http-proxy"
+    networks:
+      default:
+        external:
+          name: http-proxy
+
 **Adding swarmbuilder to your path**
 
 An install-script is included that will symlink the swarmbuilder.sh script into your `~/bin/` folder
